@@ -1,0 +1,3 @@
+git+https://github.com/unionai/unionai
+git+https://www.github.com/flyteorg/flytekit
+git+https://www.github.com/flyteorg/flyte#egg=flyteidl&subdirectory=flyteidl
