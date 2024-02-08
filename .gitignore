@@ -1,4 +1,5 @@
 secrets.txt
+deploy.yaml
 samconfig.toml
 .aws-sam/
 

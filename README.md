@@ -20,18 +20,36 @@ layers for our question-answering slackbot.
 1. Follow the [Bolt getting started](https://slack.dev/bolt-python/tutorial/getting-started)
    guide to create a slack app.
    - Follow the instructions to create a `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`.
-2. Edit the `template.yaml` with the correct values:
-   - Update the `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET` environment variables.
-3. Make sure your `~/.aws/credentials` file is properly configured with your
+2. Create a `secrets.txt` file to store these credentials. This file is ignored by
+   git and should look something like this:
+
+   ```
+   SLACK_BOT_TOKEN=<SLACK_BOT_TOKEN>
+   SLACK_SIGNING_SECRET=<SLACK_SIGNING_SECRET>
+   ```
+
+3. Export the secrets to your environment:
+
+   ```bash
+   export $(cat secrets.txt | xargs)
+   ```
+
+4. Create the `deploy.yaml` file:
+
+   ```
+   cat template.yaml | envsubst > deploy.yaml
+   ```
+
+5. Make sure your `~/.aws/credentials` file is properly configured with your
    `aws_access_key_id` and `aws_secret_access_key`.
-4. Login to AWS ECR:
+6. Login to AWS ECR:
 
    ```bash
    aws ecr-public get-login-password --profile <PROFILE> --region <REGION> | \
       docker login --username AWS --password-stdin public.ecr.aws/unionai
    ```
 
-4. Run `sam build` to build the app.
+7. Run `sam build --template deploy.yaml` to build the app.
 5. Run `sam deploy --guided` to deploy the app to AWS. This will ask you a
    series of questions on specific values you want to use for the deployment.
    In the end you should see an output like this:
