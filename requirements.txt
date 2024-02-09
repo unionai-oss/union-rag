@@ -5,3 +5,4 @@ langchain-community
 mashumaro
 openai
 unionai==0.1.0b0
+tiktoken

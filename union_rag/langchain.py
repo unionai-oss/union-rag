@@ -22,6 +22,9 @@ from langchain.vectorstores.faiss import FAISS
 from langchain_community.llms import OpenAI
 
 
+IMAGE = "ghcr.io/unionai-oss/union-rag:7162291"
+
+
 @dataclass
 class FlyteDocument(DataClassJSONMixin):
     page_filepath: FlyteFile
@@ -37,7 +40,7 @@ def set_openai_key():
     os.environ["OPENAI_API_KEY"] = current_context().secrets.get("openai_api_key")
 
 
-@task(container_image="ghcr.io/unionai-oss/union-rag:6e031eb")
+@task(container_image=IMAGE)
 def get_documents(
     urls: list[str],
     extensions: Optional[list[str]] = None,
@@ -49,7 +52,7 @@ def get_documents(
     exclude_files = frozenset(exclude_files or ["__init__.py"])
     exclude_patterns = exclude_patterns or []
 
-    output_dir = "."
+    output_dir = "./documents"
     documents = []
     for url in urls:
         repo = Repo.clone_from(url, output_dir)
@@ -73,7 +76,7 @@ def get_documents(
 
 
 @task(
-    container_image="ghcr.io/unionai-oss/union-rag:6e031eb",
+    container_image=IMAGE,
     cache=True,
     cache_version="0",
     secret_requests=[Secret(key="openai_api_key")],
@@ -101,7 +104,7 @@ def create_search_index(
 
 
 @task(
-    container_image="ghcr.io/unionai-oss/union-rag:6e031eb",
+    container_image=IMAGE,
     cache=True,
     cache_version="0",
     secret_requests=[Secret(key="openai_api_key")],
