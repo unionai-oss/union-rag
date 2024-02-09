@@ -37,7 +37,7 @@ def set_openai_key():
     os.environ["OPENAI_API_KEY"] = current_context().secrets.get("openai_api_key")
 
 
-@task(container_image="ghcr.io/unionai-oss/union-rag:latest")
+@task(container_image="ghcr.io/unionai-oss/union-rag:6e031eb")
 def get_documents(
     urls: list[str],
     extensions: Optional[list[str]] = None,
@@ -73,7 +73,7 @@ def get_documents(
 
 
 @task(
-    container_image="ghcr.io/unionai-oss/union-rag:latest",
+    container_image="ghcr.io/unionai-oss/union-rag:6e031eb",
     cache=True,
     cache_version="0",
     secret_requests=[Secret(key="openai_api_key")],
@@ -101,7 +101,7 @@ def create_search_index(
 
 
 @task(
-    container_image="ghcr.io/unionai-oss/union-rag:latest",
+    container_image="ghcr.io/unionai-oss/union-rag:6e031eb",
     cache=True,
     cache_version="0",
     secret_requests=[Secret(key="openai_api_key")],
