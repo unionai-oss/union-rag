@@ -11,6 +11,14 @@ pip install -r requirements.txt
 
 Then install [sam cli](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html).
 
+## Workflow Deployment
+
+**⚠️ Note:** Building the docker image manually is a temporary measure.
+
+```
+docker build . -f Dockerfile -t ghcr.io/unionai-oss/union-rag:latest --push
+```
+
 ## App Deployment
 
 We're using [bolt](https://slack.dev/bolt-python) to create a slack bot and

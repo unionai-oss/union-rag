@@ -1,5 +1,7 @@
-slack-bolt
-chalice
+faiss-cpu
+gitpython
+langchain
+langchain-community
+mashumaro
+openai
 unionai==0.1.0b0
-git+https://www.github.com/flyteorg/flytekit
-git+https://www.github.com/flyteorg/flyte#egg=flyteidl&subdirectory=flyteidl

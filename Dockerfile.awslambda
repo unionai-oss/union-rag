@@ -2,10 +2,9 @@ FROM public.ecr.aws/lambda/python:3.11
 
 RUN yum install -y git
 
-COPY requirements.txt .
+COPY requirements-app.txt .
 
-RUN pip install -r requirements.txt -t .
-RUN pip list
+RUN pip install -r requirements-app.txt -t .
 
 COPY app.py .
 
