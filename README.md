@@ -15,8 +15,11 @@ Then install [sam cli](https://docs.aws.amazon.com/serverless-application-model/
 
 **⚠️ Note:** Building the docker image manually is a temporary measure.
 
-```
-docker build . -f Dockerfile -t ghcr.io/unionai-oss/union-rag:latest --push
+```bash
+docker build . --platform linux/amd64 -f Dockerfile \
+   -t ghcr.io/unionai-oss/union-rag:latest \
+   -t ghcr.io/unionai-oss/union-rag:$(git rev-parse --short HEAD) \
+   --push
 ```
 
 ## App Deployment

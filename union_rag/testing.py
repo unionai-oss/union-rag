@@ -1,5 +1,5 @@
 from flytekit import task
 
-@task(container_image="ghcr.io/unionai-oss/union-rag:e7fd0cb")
+@task(container_image="ghcr.io/unionai-oss/union-rag:b86d6c5")
 def func():
     print("hello")
