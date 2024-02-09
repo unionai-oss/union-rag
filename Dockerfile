@@ -17,8 +17,8 @@ ENV PATH="${VENV}/bin:$PATH"
 # Install Python dependencies
 COPY ./requirements.txt /root
 RUN pip install -r /root/requirements.txt
-RUN pip install git+https://www.github.com/flyteorg/flytekit
-RUN pip install git+https://www.github.com/flyteorg/flyte#egg=flyteidl&subdirectory=flyteidl
+RUN pip install git+https://www.github.com/flyteorg/flytekit@master
+RUN pip install git+https://www.github.com/flyteorg/flyte@master#egg=flyteidl&subdirectory=flyteidl
 
 # Copy the actual code
 COPY . /root
