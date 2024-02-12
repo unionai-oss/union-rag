@@ -22,7 +22,7 @@ from langchain.vectorstores.faiss import FAISS
 from langchain_community.llms import OpenAI
 
 
-IMAGE = "ghcr.io/unionai-oss/union-rag:96a822a"
+IMAGE = "ghcr.io/unionai-oss/union-rag:269d17c"
 
 
 @dataclass
