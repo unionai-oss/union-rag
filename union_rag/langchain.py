@@ -2,14 +2,13 @@
 
 import itertools
 import os
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 from mashumaro.mixins.json import DataClassJSONMixin
 
-from flytekit import task, workflow, current_context, Secret
+from flytekit import task, workflow, current_context, ImageSpec, Secret
 from flytekit.types.file import FlyteFile
 from flytekit.types.directory import FlyteDirectory
 from langchain.docstore.document import Document
@@ -23,7 +22,20 @@ from langchain.vectorstores.faiss import FAISS
 from langchain_community.llms import OpenAI
 
 
-IMAGE = "ghcr.io/unionai-oss/union-rag:269d17c"
+image = ImageSpec(
+    builder="unionai",
+    packages=[
+        "faiss-cpu",
+        "gitpython",
+        "langchain",
+        "langchain-community",
+        "mashumaro",
+        "openai",
+        "unionai",
+        "tiktoken",
+    ],
+    env={"GIT_PYTHON_REFRESH": "quiet"},
+)
 
 
 @dataclass
@@ -42,7 +54,7 @@ def set_openai_key():
 
 
 @task(
-    container_image=IMAGE,
+    container_image=image,
     cache=True,
     cache_version="1",
 )
@@ -81,7 +93,7 @@ def get_documents(
 
 
 @task(
-    container_image=IMAGE,
+    container_image=image,
     cache=True,
     cache_version="2",
     secret_requests=[Secret(key="openai_api_key")],
@@ -106,19 +118,20 @@ def create_search_index(
     local_path = "./faiss_index"
     index.save_local(local_path)
     return FlyteDirectory(path=local_path)
-    # fname = shutil.make_archive(local_path, "gztar", local_path)
-    # return FlyteFile(path=fname)
 
 
 @task(
-    container_image=IMAGE,
+    container_image=image,
     secret_requests=[Secret(key="openai_api_key")],
 )
 def answer_question(question: str, search_index: FlyteDirectory) -> str:
     set_openai_key()
     search_index.download()
-    # shutil.unpack_archive(search_index.path, "./faiss_index")
-    index = FAISS.load_local(search_index.path, OpenAIEmbeddings())
+    index = FAISS.load_local(
+        search_index.path,
+        OpenAIEmbeddings(),
+        allow_dangerous_deserialization=True,
+    )
     chain = load_qa_with_sources_chain(OpenAI(temperature=0.9))
     answer = chain(
         {

@@ -11,15 +11,20 @@ pip install -r requirements.txt
 
 Then install [sam cli](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html).
 
-## Workflow Deployment
+## Run the Union RAG Workflow
 
-**⚠️ Note:** Building the docker image manually is a temporary measure.
+For quick iteration and development, you can run the workflow on Union with:
 
 ```bash
-docker build . --platform linux/amd64 -f Dockerfile \
-   -t ghcr.io/unionai-oss/union-rag:latest \
-   -t ghcr.io/unionai-oss/union-rag:$(git rev-parse --short HEAD) \
-   --push
+unionai run --remote union_rag/langchain.py ask --question 'what is flytekit?'
+```
+
+## Workflow Deployment
+
+Deploy the workflow to Union with the following command:
+
+```bash
+unionai register union_rag/langchain.py
 ```
 
 ## App Deployment
