@@ -2,6 +2,7 @@
 
 import itertools
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -40,7 +41,11 @@ def set_openai_key():
     os.environ["OPENAI_API_KEY"] = current_context().secrets.get("openai_api_key")
 
 
-@task(container_image=IMAGE)
+@task(
+    container_image=IMAGE,
+    cache=True,
+    cache_version="1",
+)
 def get_documents(
     urls: list[str],
     extensions: Optional[list[str]] = None,
@@ -78,7 +83,7 @@ def get_documents(
 @task(
     container_image=IMAGE,
     cache=True,
-    cache_version="0",
+    cache_version="2",
     secret_requests=[Secret(key="openai_api_key")],
 )
 def create_search_index(
@@ -101,21 +106,23 @@ def create_search_index(
     local_path = "./faiss_index"
     index.save_local(local_path)
     return FlyteDirectory(path=local_path)
+    # fname = shutil.make_archive(local_path, "gztar", local_path)
+    # return FlyteFile(path=fname)
 
 
 @task(
     container_image=IMAGE,
-    cache=True,
-    cache_version="0",
     secret_requests=[Secret(key="openai_api_key")],
 )
 def answer_question(question: str, search_index: FlyteDirectory) -> str:
     set_openai_key()
+    search_index.download()
+    # shutil.unpack_archive(search_index.path, "./faiss_index")
     index = FAISS.load_local(search_index.path, OpenAIEmbeddings())
     chain = load_qa_with_sources_chain(OpenAI(temperature=0.9))
     answer = chain(
         {
-            "input_documents": index.similarity_search(question, k=3),
+            "input_documents": index.similarity_search(question, k=10),
             "question": question,
         },
     )
