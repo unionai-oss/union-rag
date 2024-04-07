@@ -3,37 +3,29 @@
 import itertools
 import os
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from typing import Optional
 
 from mashumaro.mixins.json import DataClassJSONMixin
 
-from flytekit import task, workflow, current_context, ImageSpec, Secret
+from flytekit import task, workflow, current_context, wait_for_input, ImageSpec, Secret
 from flytekit.types.file import FlyteFile
 from flytekit.types.directory import FlyteDirectory
 from langchain.docstore.document import Document
 
 from git import Repo
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain
-from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.docstore.document import Document
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores.faiss import FAISS
-from langchain_community.llms import OpenAI
 
 
 image = ImageSpec(
     builder="unionai",
-    packages=[
-        "faiss-cpu",
-        "gitpython",
-        "langchain",
-        "langchain-community",
-        "mashumaro",
-        "openai",
-        "unionai",
-        "tiktoken",
-    ],
+    apt_packages=["git"],
+    requirements="requirements.txt",
     env={"GIT_PYTHON_REFRESH": "quiet"},
 )
 
@@ -56,7 +48,7 @@ def set_openai_key():
 @task(
     container_image=image,
     cache=True,
-    cache_version="1",
+    cache_version="3",
 )
 def get_documents(
     urls: list[str],
@@ -95,7 +87,7 @@ def get_documents(
 @task(
     container_image=image,
     cache=True,
-    cache_version="2",
+    cache_version="5",
     secret_requests=[Secret(key="openai_api_key")],
 )
 def create_search_index(
@@ -132,10 +124,15 @@ def answer_question(question: str, search_index: FlyteDirectory) -> str:
         OpenAIEmbeddings(),
         allow_dangerous_deserialization=True,
     )
-    chain = load_qa_with_sources_chain(OpenAI(temperature=0.9))
+    chain = load_qa_with_sources_chain(
+        ChatOpenAI(
+            model_name="gpt-4-0125-preview",
+            temperature=0.9,
+        )
+    )
     answer = chain(
         {
-            "input_documents": index.similarity_search(question, k=10),
+            "input_documents": index.similarity_search(question, k=8),
             "question": question,
         },
     )
@@ -148,3 +145,11 @@ def ask(question: str, chunk_size: int = 1024) -> str:
     search_index = create_search_index(documents=docs, chunk_size=chunk_size)
     answer = answer_question(question=question, search_index=search_index)
     return answer
+
+
+@workflow
+def ask_with_feedback(question: str, chunk_size: int = 1024) -> str:
+    answer = ask(question=question, chunk_size=chunk_size)
+    feedback = wait_for_input("get-feedback", timeout=timedelta(hours=1), expected_type=str)
+    answer >> feedback
+    return feedback
