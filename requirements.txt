@@ -2,7 +2,8 @@ faiss-cpu
 gitpython
 langchain
 langchain-community
+langchain-openai
 mashumaro
 openai
-unionai
+unionai==0.1.11
 tiktoken

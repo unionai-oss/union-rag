@@ -23,6 +23,7 @@ Resources:
         Variables:
           SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
           SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET}
+          UNIONAI_SERVERLESS_API_KEY: ${UNIONAI_SERVERLESS_API_KEY}
     Metadata:
       Dockerfile: Dockerfile.awslambda
       DockerContext: .

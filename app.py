@@ -1,62 +1,52 @@
 import logging
 import re
 
-from dataclasses import dataclass
 from slack_bolt import App
 from slack_bolt.adapter.aws_lambda import SlackRequestHandler
 
 from unionai.remote import UnionRemote
 
 
-@dataclass
-class Message:
-    """
-    message type: https://api.slack.com/events/message
-    """
-    type: str
-    subtype: str
-    text: str
-    ts: str
-    user: str
-
-
 # process_before_response must be True when running on FaaS
 app = App(process_before_response=True)
 
 
-@app.event("app_mention")
-def handle_app_mentions(body, say, logger):
-    logger.info(body)
-    say("What's up?")
+def respond_to_slack_within_3_seconds(body, say):
+    print(body)
+    event = body["event"]
+    thread_ts = event.get("thread_ts", None) or event["ts"]
+    if event.get("text") is None:
+        say(f"Please provide a query.", thread_ts=thread_ts)
+    else:
+        say(f"Processing your query, one moment...", thread_ts=thread_ts)
 
 
-@app.command("/flyte-attendant")
-def flyte_attendant_command(ack):
-    ack("Thanks!")
-
-
-@app.message("@flyte-attendant")
-def answer_question_union(message, say):
-    message = Message(**message)
+def answer_question(body, say):
     remote = UnionRemote()
-    task = remote.get_task("union_rag.langchain.ask")
-    question = message.text.replace("@flyte-attendant", "")
-    execution = remote.execute(task, inputs={"question": question}, wait=True)
-    response, _ = [*execution.outputs.values()]
-    say(response)
+    task = remote.fetch_workflow(name="union_rag.langchain.ask")
+    event = body["event"]
+    text = re.sub("<@.+>", "", event["text"]).strip()
+    execution = remote.execute(task, inputs={"question": text}, wait=True)
+    response = execution.outputs["o0"].replace("@flyte-attendant", "")
+    thread_ts = event.get("thread_ts", None) or event["ts"]
+    say(response, thread_ts=thread_ts)
 
 
-@app.message(re.compile("^\/flyte-attendant-lambda"))
-def answer_question_lambda(message, say):
-    message = Message(**message)
-    remote = UnionRemote()
-    # TODO: get latest execution of this task
-    task = remote.get_task("union_rag.langchain.create_search_index")
+app.event("app_mention")(   
+    ack=respond_to_slack_within_3_seconds,
+    lazy=[answer_question],
+)
 
-    # call langchain.answer_question code here
-    response = ...
+# TODO:
+# - add thumbs up/thumbs down button to the response (https://slack.dev/bolt-python/concepts#message-sending)
+# - create a workflow that takes the thumbs up/thumbs down signal and sends it back to Union
+# - link the thumbs up/thumbs down button to send the signal to the gate node
 
-    say(response)
+
+app.command("/flyte-attendant")(
+    ack=respond_to_slack_within_3_seconds,
+    lazy=[answer_question],
+)
 
 
 SlackRequestHandler.clear_all_log_handlers()

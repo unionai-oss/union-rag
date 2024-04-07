@@ -36,12 +36,14 @@ layers for our question-answering slackbot.
 1. Follow the [Bolt getting started](https://slack.dev/bolt-python/tutorial/getting-started)
    guide to create a slack app.
    - Follow the instructions to create a `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET`.
+   - Create a `UNIONAI_SERVERLESS_API_KEY` using `unionai create app union-rag`
 2. Create a `secrets.txt` file to store these credentials. This file is ignored by
    git and should look something like this:
 
    ```
    SLACK_BOT_TOKEN=<SLACK_BOT_TOKEN>
    SLACK_SIGNING_SECRET=<SLACK_SIGNING_SECRET>
+   UNIONAI_SERVERLESS_API_KEY=<UNIONAI_SERVERLESS_API_KEY>
    ```
 
 3. Export the secrets to your environment:
@@ -58,11 +60,10 @@ layers for our question-answering slackbot.
 
 5. Make sure your `~/.aws/credentials` file is properly configured with your
    `aws_access_key_id` and `aws_secret_access_key`.
-6. Login to AWS ECR:
+6. Login to AWS ECR. First do `aws configure sso`, then:
 
    ```bash
-   aws ecr-public get-login-password --profile <PROFILE> --region <REGION> | \
-      docker login --username AWS --password-stdin public.ecr.aws/unionai
+   aws sso --login <profile>
    ```
 
 7. Run `sam build --template deploy.yaml` to build the app.
