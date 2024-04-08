@@ -1,51 +1,128 @@
+import json
 import logging
 import re
+import time
 
 from slack_bolt import App
 from slack_bolt.adapter.aws_lambda import SlackRequestHandler
 
-from unionai.remote import UnionRemote
 
+N_RETRIES = 180
 
 # process_before_response must be True when running on FaaS
 app = App(process_before_response=True)
 
 
-def respond_to_slack_within_3_seconds(body, say):
-    print(body)
+def ack_answer_question(body, ack, say):
+    ack()
     event = body["event"]
     thread_ts = event.get("thread_ts", None) or event["ts"]
     if event.get("text") is None:
-        say(f"Please provide a query.", thread_ts=thread_ts)
+        say(f"Please ask a question.", thread_ts=thread_ts)
     else:
-        say(f"Processing your query, one moment...", thread_ts=thread_ts)
+        say(f"Processing your question, one moment...", thread_ts=thread_ts)
+
+
+def ack_get_feedback(ack):
+    ack()
 
 
 def answer_question(body, say):
-    remote = UnionRemote()
-    task = remote.fetch_workflow(name="union_rag.langchain.ask")
+    from unionai.remote import UnionRemote
+
     event = body["event"]
     text = re.sub("<@.+>", "", event["text"]).strip()
-    execution = remote.execute(task, inputs={"question": text}, wait=True)
-    response = execution.outputs["o0"].replace("@flyte-attendant", "")
+
+    remote = UnionRemote()
+    workflow = remote.fetch_workflow(name="union_rag.langchain.ask_with_feedback")
+    execution = remote.execute(workflow, inputs={"question": text})
+    execution = remote.sync(execution, sync_nodes=True)
+
+    answer = None
+    for _ in range(N_RETRIES):
+        if "n0" in execution.node_executions and execution.node_executions["n0"].is_done:
+            answer = execution.node_executions["n0"].outputs["o0"]
+            break
+        execution = remote.sync(execution, sync_nodes=True)
+        time.sleep(1)
+
+    if answer is None:
+        raise RuntimeError("Failed to get answer")
+
+    response = answer.replace("@flyte-attendant", "")
     thread_ts = event.get("thread_ts", None) or event["ts"]
-    say(response, thread_ts=thread_ts)
+    say(
+        text=response,
+        blocks=[
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": response,
+                },
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "Was this answer helpful?",
+                },
+            },
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "emoji": True,
+                            "text": "👍"
+                        },
+                        "value": f"thumbs_up:{execution.id.name}",
+                        "action_id": "feedback_thumbs_up",
+                    },
+                    {
+                        "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "emoji": True,
+                            "text": "👎"
+                        },
+                        "value": f"thumbs_down:{execution.id.name}",
+                        "action_id": "feedback_thumbs_down",
+                    }
+                ]
+            }
+        ],
+        thread_ts=thread_ts,
+        unfurl_links=False,
+        unfurl_media=False,
+    )
+
+
+def get_feedback(body, say, ack):
+    ack()
+
+    from unionai.remote import UnionRemote
+
+    remote = UnionRemote()
+    action = body["actions"][0]
+    label, execution_id = action["value"].split(":")
+    remote.set_signal("get-feedback", execution_id, label)
+    thread_ts = body["message"]["thread_ts"]
+
+    print(json.dumps(body, indent=4))
+    say(f"Thank you for your feedback!", thread_ts=thread_ts)
 
 
 app.event("app_mention")(   
-    ack=respond_to_slack_within_3_seconds,
+    ack=ack_answer_question,
     lazy=[answer_question],
 )
 
-# TODO:
-# - add thumbs up/thumbs down button to the response (https://slack.dev/bolt-python/concepts#message-sending)
-# - create a workflow that takes the thumbs up/thumbs down signal and sends it back to Union
-# - link the thumbs up/thumbs down button to send the signal to the gate node
-
-
-app.command("/flyte-attendant")(
-    ack=respond_to_slack_within_3_seconds,
-    lazy=[answer_question],
+app.action(re.compile("^feedback_thumbs_.+$"))(
+    ack=ack_get_feedback,
+    lazy=[get_feedback],
 )
 
 
