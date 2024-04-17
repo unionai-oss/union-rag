@@ -29,6 +29,13 @@ image = ImageSpec(
     env={"GIT_PYTHON_REFRESH": "quiet"},
 )
 
+# TODO:
+# - use web scraping to get html content from flyte/union urls: https://python.langchain.com/docs/use_cases/web_scraping/
+# - use html document loader: https://python.langchain.com/docs/modules/data_connection/document_loaders/html/
+# - ingest slack threads:
+#   - https://python.langchain.com/docs/integrations/document_loaders/slack/
+#   - https://python.langchain.com/docs/integrations/chat_loaders/slack/
+
 
 @dataclass
 class FlyteDocument(DataClassJSONMixin):
