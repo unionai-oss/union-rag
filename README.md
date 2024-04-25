@@ -63,7 +63,7 @@ layers for our question-answering slackbot.
 6. Login to AWS ECR. First do `aws configure sso`, then:
 
    ```bash
-   aws sso --login <profile>
+   aws sso login --profile <PROFILE>
    ```
 
 7. Run `sam build --template deploy.yaml` to build the app.

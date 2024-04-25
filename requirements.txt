@@ -1,9 +1,13 @@
+beautifulsoup4
 faiss-cpu
 gitpython
 langchain
 langchain-community
 langchain-openai
+markdownify
 mashumaro
 openai
+playwright
+requests
 unionai==0.1.11
 tiktoken

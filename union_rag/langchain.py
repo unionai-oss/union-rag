@@ -1,21 +1,32 @@
-"""Flyte attendant workflow."""
+"""Flyte attendant workflow.
+
+TODO:
+- ingest slack threads:
+  - https://python.langchain.com/docs/integrations/document_loaders/slack/
+  - https://python.langchain.com/docs/integrations/chat_loaders/slack/
+"""
 
 import itertools
 import os
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Any, List, Optional, Sequence
+from urllib.parse import urljoin
 
+import requests
+from bs4 import BeautifulSoup
+from markdownify import markdownify
 from mashumaro.mixins.json import DataClassJSONMixin
 
 from flytekit import task, workflow, current_context, wait_for_input, ImageSpec, Secret
 from flytekit.types.file import FlyteFile
 from flytekit.types.directory import FlyteDirectory
-from langchain.docstore.document import Document
 
-from git import Repo
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain
+from langchain_community.document_loaders import AsyncHtmlLoader
+from langchain_community.document_transformers import BeautifulSoupTransformer
+from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.docstore.document import Document
 from langchain.text_splitter import CharacterTextSplitter
@@ -29,12 +40,62 @@ image = ImageSpec(
     env={"GIT_PYTHON_REFRESH": "quiet"},
 )
 
-# TODO:
-# - use web scraping to get html content from flyte/union urls: https://python.langchain.com/docs/use_cases/web_scraping/
-# - use html document loader: https://python.langchain.com/docs/modules/data_connection/document_loaders/html/
-# - ingest slack threads:
-#   - https://python.langchain.com/docs/integrations/document_loaders/slack/
-#   - https://python.langchain.com/docs/integrations/chat_loaders/slack/
+
+class HTML2MarkdownTransformer(BeautifulSoupTransformer):
+
+    def __init__(self, root_url_tags_mapping: dict[str, tuple[str, dict]] = None):
+        self.root_url_tags_mapping = root_url_tags_mapping
+
+    def transform_documents(
+        self,
+        documents: Sequence[Document],
+        unwanted_tags: list[str | tuple[str, dict]] = ["script", "style"],
+        tags_to_extract: list[str] = ["p", "li", "div", "a"],
+        remove_lines: bool = True,
+        **kwargs: Any,
+    ) -> Sequence[Document]:
+        for doc in documents:
+            cleaned_content = doc.page_content
+            cleaned_content = self.remove_unwanted_tags(cleaned_content, unwanted_tags)
+            cleaned_content = self.extract_tags(
+                cleaned_content,
+                self.get_root_tag(doc.metadata["source"]),
+            )
+            if remove_lines:
+                cleaned_content = self.remove_unnecessary_lines(cleaned_content)
+            doc.page_content = cleaned_content
+
+        return documents
+    
+    def get_root_tag(self, source: str):
+        for url, tag in self.root_url_tags_mapping.items():
+            if source.startswith(url):
+                return tag
+        raise ValueError(f"Unknown source: {source}")
+            
+    @staticmethod
+    def remove_unwanted_tags(html_content: str, unwanted_tags: List[str]) -> str:
+        soup = BeautifulSoup(html_content, "html.parser")
+        for tag in unwanted_tags:
+            if isinstance(tag, str):
+                tag = [tag]
+            for element in soup.find_all(*tag):
+                element.decompose()
+        return str(soup)
+
+    @staticmethod
+    def extract_tags(
+        html_content: str,
+        root_tag: tuple[str, dict],
+    ) -> str:
+        """Custom content extraction."""
+        soup = BeautifulSoup(html_content, "html.parser")
+        # the <article role="main"> tag contains all the content of a page
+        content = soup.find_all(*root_tag)
+        if len(content) == 0:
+            return ""
+        content = content[0]
+        return markdownify(str(content)).replace("\n\n\n\n", "\n\n").strip()
 
 
 @dataclass
@@ -48,47 +109,95 @@ class FlyteDocument(DataClassJSONMixin):
         return Document(page_content=page_content, metadata=self.metadata)
     
 
-def set_openai_key():
-    os.environ["OPENAI_API_KEY"] = current_context().secrets.get("openai_api_key")
+def get_all_links(url, base_domain, visited: set, limit: Optional[int] = None):
+    if url in visited or (limit is not None and len(visited) > limit):
+        return visited
+
+    visited.add(url)
+    print("Adding", url)
+    try:
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        for link in soup.find_all('a', href=True):
+            full_link = urljoin(url, link['href'])
+            full_link = full_link.split("#")[0]
+            full_link = full_link.split("?")[0]
+            if full_link.startswith(base_domain):
+                visited = get_all_links(full_link, base_domain, visited, limit)
+    except requests.exceptions.RequestException as e:
+        print(f"Failed to access {url}: {str(e)}")
+    return visited
+
+
+def get_links(starting_url: str, limit: Optional[int] = None) -> List[str]:
+    print(f"Collecting urls at {starting_url}")
+    all_links = get_all_links(
+        starting_url, starting_url, visited=set(), limit=limit
+    )
+    return list(all_links)
+
 
 
 @task(
     container_image=image,
     cache=True,
-    cache_version="3",
+    cache_version="1",
 )
 def get_documents(
-    urls: list[str],
-    extensions: Optional[list[str]] = None,
-    exclude_files: Optional[list[str]] = None,
-    exclude_patterns: Optional[list[str]] = None,
+    root_url_tags_mapping: Optional[dict] = None,
+    include_union: bool = False,
+    limit: Optional[int] = None,
 ) -> list[FlyteDocument]:
-    """Fetch documents from a github url."""
-    extensions = extensions or [".py", ".md", ".rst"]
-    exclude_files = frozenset(exclude_files or ["__init__.py"])
-    exclude_patterns = exclude_patterns or []
 
-    output_dir = "./documents"
+    if root_url_tags_mapping is None:
+        root_url_tags_mapping = {
+            "https://docs.flyte.org": ("article", {"role": "main"}),
+            "https://flyte.org/blog": ("div", {"class": "blog-content"}),
+        }
+        if include_union:
+            root_url_tags_mapping.update({
+                "https://docs.union.ai": ("div", {"class": "content-container"}),
+                "https://www.union.ai/blog-post": ("div", {"class": "blog-content"}),
+            })
+
+    page_transformer = HTML2MarkdownTransformer(root_url_tags_mapping)
+    urls = list(
+        itertools.chain(*(get_links(url, limit) for url in root_url_tags_mapping))
+    )
+    loader = AsyncHtmlLoader(urls)
+    html = loader.load()
+
+    md_transformed = page_transformer.transform_documents(
+        html,
+        unwanted_tags=[
+            "script",
+            "style",
+            ("a", {"class": "headerlink"}),
+            ("button", {"class": "CopyButton"}),
+            ("div", {"class": "codeCopied"}),
+            ("span", {"class": "lang"}),
+        ],
+        remove_lines=False,
+    )
+
+    root_path = Path("./docs")
+    root_path.mkdir(exist_ok=True)
     documents = []
-    for url in urls:
-        repo = Repo.clone_from(url, output_dir)
-        git_sha = repo.head.commit.hexsha
-        git_dir = Path(output_dir)
-
-        exclude_from_patterns = [
-            *itertools.chain(*(git_dir.glob(p) for p in exclude_patterns))
-        ]
-
-        for file in itertools.chain(
-            *[git_dir.glob(f"**/*{ext}") for ext in extensions]
-        ):
-            if file.name in exclude_files or file in exclude_from_patterns:
-                continue
-
-            github_url = f"{url}/blob/{git_sha}/{file.relative_to(git_dir)}"
-            documents.append(FlyteDocument(file, metadata={"source": github_url}))
+    for i, doc in enumerate(md_transformed):
+        if doc.page_content == "":
+            print(f"Skipping empty document {doc}")
+            continue
+        path = root_path / f"doc_{i}.md"
+        with path.open("w") as f:
+            f.write(doc.page_content)
+        documents.append(FlyteDocument(page_filepath=path, metadata=doc.metadata))
 
     return documents
+
+
+def set_openai_key():
+    os.environ["OPENAI_API_KEY"] = current_context().secrets.get("openai_api_key")
 
 
 @task(

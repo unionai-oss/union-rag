@@ -100,7 +100,7 @@ def answer_question(body, say):
     )
 
 
-def get_feedback(body, say, ack):
+def get_feedback(body, respond, ack):
     ack()
 
     from unionai.remote import UnionRemote
@@ -108,11 +108,33 @@ def get_feedback(body, say, ack):
     remote = UnionRemote()
     action = body["actions"][0]
     label, execution_id = action["value"].split(":")
-    remote.set_signal("get-feedback", execution_id, label)
-    thread_ts = body["message"]["thread_ts"]
 
-    print(json.dumps(body, indent=4))
-    say(f"Thank you for your feedback!", thread_ts=thread_ts)
+    execution = remote.fetch_execution(name=execution_id)
+    execution = remote.sync(execution)
+    if execution.is_done:
+        print("feedback already set")
+        return
+
+    print("feedback_body", json.dumps(body, indent=4))
+    text = body["message"]["text"]
+
+    # update blocks so that the clicked button appears to be selected
+    blocks = body["message"]["blocks"]
+    for block in blocks:
+        if block["type"] == "actions":
+            for element in block["elements"]:
+                if element["action_id"] == action["action_id"]:
+                    element["style"] = "primary"
+                elif "style" in element:
+                    element.pop("style")
+
+    remote.set_signal("get-feedback", execution_id, label)
+
+    respond(
+        replace_original=True,
+        text=text,
+        blocks=blocks,
+    )
 
 
 app.event("app_mention")(   
