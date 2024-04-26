@@ -1,17 +1,12 @@
-"""Flyte attendant workflow.
-
-TODO:
-- ingest slack threads:
-  - https://python.langchain.com/docs/integrations/document_loaders/slack/
-  - https://python.langchain.com/docs/integrations/chat_loaders/slack/
-"""
+"""Flyte attendant workflow."""
 
 import itertools
 import os
+import re
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, List, Optional, Sequence
+from typing import Any, Iterator, List, Optional
 from urllib.parse import urljoin
 
 import requests
@@ -19,7 +14,7 @@ from bs4 import BeautifulSoup
 from markdownify import markdownify
 from mashumaro.mixins.json import DataClassJSONMixin
 
-from flytekit import task, workflow, current_context, wait_for_input, ImageSpec, Secret
+from flytekit import task, workflow, current_context, wait_for_input, ImageSpec, Secret, Resources
 from flytekit.types.file import FlyteFile
 from flytekit.types.directory import FlyteDirectory
 
@@ -48,12 +43,12 @@ class HTML2MarkdownTransformer(BeautifulSoupTransformer):
 
     def transform_documents(
         self,
-        documents: Sequence[Document],
+        documents: Iterator[Document],
         unwanted_tags: list[str | tuple[str, dict]] = ["script", "style"],
         tags_to_extract: list[str] = ["p", "li", "div", "a"],
         remove_lines: bool = True,
         **kwargs: Any,
-    ) -> Sequence[Document]:
+    ) -> Iterator[Document]:
         for doc in documents:
             cleaned_content = doc.page_content
             cleaned_content = self.remove_unwanted_tags(cleaned_content, unwanted_tags)
@@ -64,8 +59,7 @@ class HTML2MarkdownTransformer(BeautifulSoupTransformer):
             if remove_lines:
                 cleaned_content = self.remove_unnecessary_lines(cleaned_content)
             doc.page_content = cleaned_content
-
-        return documents
+            yield doc
     
     def get_root_tag(self, source: str):
         for url, tag in self.root_url_tags_mapping.items():
@@ -138,11 +132,11 @@ def get_links(starting_url: str, limit: Optional[int] = None) -> List[str]:
     return list(all_links)
 
 
-
 @task(
     container_image=image,
     cache=True,
-    cache_version="1",
+    cache_version="2",
+    requests=Resources(cpu="2", mem="8Gi")
 )
 def get_documents(
     root_url_tags_mapping: Optional[dict] = None,
@@ -152,13 +146,11 @@ def get_documents(
 
     if root_url_tags_mapping is None:
         root_url_tags_mapping = {
-            "https://docs.flyte.org": ("article", {"role": "main"}),
-            "https://flyte.org/blog": ("div", {"class": "blog-content"}),
+            "https://docs.flyte.org/en/latest/": ("article", {"role": "main"}),
         }
         if include_union:
             root_url_tags_mapping.update({
-                "https://docs.union.ai": ("div", {"class": "content-container"}),
-                "https://www.union.ai/blog-post": ("div", {"class": "blog-content"}),
+                "https://docs.union.ai/": ("div", {"class": "content-container"}),
             })
 
     page_transformer = HTML2MarkdownTransformer(root_url_tags_mapping)
@@ -166,7 +158,7 @@ def get_documents(
         itertools.chain(*(get_links(url, limit) for url in root_url_tags_mapping))
     )
     loader = AsyncHtmlLoader(urls)
-    html = loader.load()
+    html = loader.lazy_load()
 
     md_transformed = page_transformer.transform_documents(
         html,
@@ -189,6 +181,7 @@ def get_documents(
             print(f"Skipping empty document {doc}")
             continue
         path = root_path / f"doc_{i}.md"
+        print(f"Writing document {doc.metadata['source']} to {path}")
         with path.open("w") as f:
             f.write(doc.page_content)
         documents.append(FlyteDocument(page_filepath=path, metadata=doc.metadata))
@@ -204,6 +197,7 @@ def set_openai_key():
     container_image=image,
     cache=True,
     cache_version="5",
+    requests=Resources(cpu="2", mem="8Gi"),
     secret_requests=[Secret(key="openai_api_key")],
 )
 def create_search_index(
@@ -228,8 +222,31 @@ def create_search_index(
     return FlyteDirectory(path=local_path)
 
 
+def to_slack_mrkdown(text: str):
+    regex_patterns = (
+        # replace hyphenated lists with bullet points
+        (re.compile('^- ', flags=re.M), '• '),
+        (re.compile('^  - ', flags=re.M), '  ◦ '),
+        (re.compile('^    - ', flags=re.M), '    ⬩ '), # ◆
+        (re.compile('^      - ', flags=re.M), '    ◽ '),
+
+        # replace headers with bold
+        (re.compile('^#+ (.+)$', flags=re.M), r'*\1*'),
+        (re.compile('\*\*'), '*'),
+        (re.compile('\*\*'), '*'),
+
+        # remove code block language
+        (re.compile("```[a-z]+"), "```")
+    )
+    for regex, replacement in regex_patterns:
+        text = regex.sub(replacement, text)
+
+    return text
+
+
 @task(
     container_image=image,
+    requests=Resources(cpu="2", mem="8Gi"),
     secret_requests=[Secret(key="openai_api_key")],
 )
 def answer_question(question: str, search_index: FlyteDirectory) -> str:
@@ -252,20 +269,45 @@ def answer_question(question: str, search_index: FlyteDirectory) -> str:
             "question": question,
         },
     )
-    return answer["output_text"]
+    output_text = answer["output_text"]
+
+    output_text = to_slack_mrkdown(output_text)
+    return output_text
 
 
 @workflow
-def ask(question: str, chunk_size: int = 1024) -> str:
-    docs = get_documents(urls=["https://github.com/flyteorg/flytesnacks"])
+def ask(
+    question: str,
+    chunk_size: int = 1024,
+    root_url_tags_mapping: Optional[dict] = None,
+    include_union: bool = False,
+    limit: Optional[int] = None,
+) -> str:
+    docs = get_documents(
+        root_url_tags_mapping=root_url_tags_mapping,
+        include_union=include_union,
+        limit=limit,
+    )
     search_index = create_search_index(documents=docs, chunk_size=chunk_size)
     answer = answer_question(question=question, search_index=search_index)
     return answer
 
 
 @workflow
-def ask_with_feedback(question: str, chunk_size: int = 1024) -> str:
-    answer = ask(question=question, chunk_size=chunk_size)
+def ask_with_feedback(
+    question: str,
+    chunk_size: int = 1024,
+    root_url_tags_mapping: Optional[dict] = None,
+    include_union: bool = False,
+    limit: Optional[int] = None,
+) -> str:
+    answer = ask(
+        question=question,
+        chunk_size=chunk_size,
+        root_url_tags_mapping=root_url_tags_mapping,
+        include_union=include_union,
+        limit=limit,
+    )
     feedback = wait_for_input("get-feedback", timeout=timedelta(hours=1), expected_type=str)
     answer >> feedback
     return feedback
