@@ -92,10 +92,6 @@ layers for our question-answering slackbot.
    Successfully created/updated stack - union-rag in us-east-2
    ```
 
-6. In the slack app you created at `api.slack.com`, go to **slash commands**
-   and create a new command.
-   - Under Command, enter `/flyte-attendant`
-   - Under Request URL, enter the Rest API URL from the previous step with `/slack/events`
-     appended to the end. In this example, it would be `https://xyz.execute-api.us-east-2.amazonaws.com/Prod/slack/events`
-7. Now test your slack app by installing it in your slack workspace and typing
-   `/flyte-attendant`. You should see `Thanks!` as the response to your command.
+6. Now test your slack app by installing it in your slack workspace and typing
+   `@flyte-attendant what is flytekit?`. You should see an initial response
+   from the bot, followed by the answer to your question.
