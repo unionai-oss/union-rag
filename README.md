@@ -27,9 +27,9 @@ Deploy the workflow to Union with the following command:
 unionai register union_rag/langchain.py
 ```
 
-## App Deployment
+## Slack App Deployment
 
-We're using [bolt](https://slack.dev/bolt-python) to create a slack bot and
+We'll use [bolt](https://slack.dev/bolt-python) to create a slack bot and
 `sam cli` to deploy a lambda function that will serve as one of the backend
 layers for our question-answering slackbot.
 

@@ -6,7 +6,7 @@ COPY requirements-app.txt .
 
 RUN pip install -r requirements-app.txt -t .
 
-COPY app.py .
+COPY slack_app.py .
 
 # Command can be overwritten by providing a different command in the template directly.
-CMD ["app.handler"]
+CMD ["slack_app.handler"]
