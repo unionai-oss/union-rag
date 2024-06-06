@@ -2,12 +2,19 @@
 
 import itertools
 import os
-import re
 from datetime import timedelta
 from pathlib import Path
 from typing import Optional
 
-from flytekit import task, workflow, current_context, wait_for_input, ImageSpec, Secret, Resources
+from flytekit import (
+    task,
+    workflow,
+    current_context,
+    wait_for_input,
+    ImageSpec,
+    Secret,
+    Resources,
+)
 from flytekit.types.directory import FlyteDirectory
 
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain
@@ -19,6 +26,7 @@ from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores.faiss import FAISS
 
 from union_rag.document import get_links, FlyteDocument, HTML2MarkdownTransformer
+from union_rag.utils import to_slack_mrkdown
 
 
 image = ImageSpec(
@@ -45,10 +53,10 @@ def get_documents(
         root_url_tags_mapping = {
             "https://docs.flyte.org/en/latest/": ("article", {"role": "main"}),
         }
-        if include_union:
-            root_url_tags_mapping.update({
-                "https://docs.union.ai/": ("div", {"class": "content-container"}),
-            })
+    if include_union:
+        root_url_tags_mapping.update({
+            "https://docs.union.ai/": ("article", {"class": "bd-article"}),
+        })
 
     page_transformer = HTML2MarkdownTransformer(root_url_tags_mapping)
     urls = list(
@@ -113,28 +121,6 @@ def create_search_index(
     local_path = "./faiss_index"
     index.save_local(local_path)
     return FlyteDirectory(path=local_path)
-
-
-def to_slack_mrkdown(text: str):
-    regex_patterns = (
-        # replace hyphenated lists with bullet points
-        (re.compile('^- ', flags=re.M), '• '),
-        (re.compile('^  - ', flags=re.M), '  ◦ '),
-        (re.compile('^    - ', flags=re.M), '    ⬩ '), # ◆
-        (re.compile('^      - ', flags=re.M), '    ◽ '),
-
-        # replace headers with bold
-        (re.compile('^#+ (.+)$', flags=re.M), r'*\1*'),
-        (re.compile('\*\*'), '*'),
-        (re.compile('\*\*'), '*'),
-
-        # remove code block language
-        (re.compile("```[a-z]+"), "```")
-    )
-    for regex, replacement in regex_patterns:
-        text = regex.sub(replacement, text)
-
-    return text
 
 
 @task(
