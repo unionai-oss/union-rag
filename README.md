@@ -9,14 +9,12 @@ conda create -n union-rag python=3.11 -y
 pip install -r requirements.txt
 ```
 
-Then install [sam cli](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html).
-
 ## Run the Union RAG Workflow
 
 For quick iteration and development, you can run the workflow on Union with:
 
 ```bash
-unionai run --remote union_rag/langchain.py ask --question 'what is flytekit?'
+unionai run --copy-all --remote union_rag/langchain.py ask --question 'what is flytekit?'
 ```
 
 ## Workflow Deployment
@@ -28,6 +26,8 @@ unionai register union_rag/langchain.py
 ```
 
 ## Slack App Deployment
+
+Install [sam cli](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html).
 
 We'll use [bolt](https://slack.dev/bolt-python) to create a slack bot and
 `sam cli` to deploy a lambda function that will serve as one of the backend

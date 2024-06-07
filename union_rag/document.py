@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from langchain_core.documents import Document
 from typing import Any, Iterator, List, Optional
@@ -11,6 +12,10 @@ from mashumaro.mixins.json import DataClassJSONMixin
 from flytekit.types.file import FlyteFile
 
 from langchain_community.document_transformers import BeautifulSoupTransformer
+
+
+REQUEST_TIMEOUT = 10.0
+
 
 class HTML2MarkdownTransformer(BeautifulSoupTransformer):
 
@@ -68,7 +73,7 @@ class HTML2MarkdownTransformer(BeautifulSoupTransformer):
 
 
 @dataclass
-class FlyteDocument(DataClassJSONMixin):
+class CustomDocument(DataClassJSONMixin):
     page_filepath: FlyteFile
     metadata: dict
 
@@ -78,14 +83,27 @@ class FlyteDocument(DataClassJSONMixin):
         return Document(page_content=page_content, metadata=self.metadata)
     
 
-def get_all_links(url, base_domain, visited: set, limit: Optional[int] = None):
+def get_all_links(
+    url,
+    base_domain,
+    visited: set,
+    limit: Optional[int] = None,
+    exclude_patterns: Optional[str] = None,
+):
     if url in visited or (limit is not None and len(visited) > limit):
         return visited
 
+    if exclude_patterns is not None:
+        for exclude_pattern in exclude_patterns:
+            if exclude_pattern.search(url):
+                print(f"Skipping {url} due to exclusion pattern {exclude_pattern}.")
+                return visited
+
     visited.add(url)
     print("Adding", url)
+
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=REQUEST_TIMEOUT)
         soup = BeautifulSoup(response.text, 'html.parser')
 
         for link in soup.find_all('a', href=True):
@@ -93,15 +111,30 @@ def get_all_links(url, base_domain, visited: set, limit: Optional[int] = None):
             full_link = full_link.split("#")[0]
             full_link = full_link.split("?")[0]
             if full_link.startswith(base_domain):
-                visited = get_all_links(full_link, base_domain, visited, limit)
+                visited = get_all_links(full_link, base_domain, visited, limit, exclude_patterns)
     except requests.exceptions.RequestException as e:
         print(f"Failed to access {url}: {str(e)}")
     return visited
 
 
-def get_links(starting_url: str, limit: Optional[int] = None) -> List[str]:
+def get_links(
+    starting_url: str,
+    limit: Optional[int] = None,
+    exclude_patterns: Optional[str] = None,
+) -> List[str]:
     print(f"Collecting urls at {starting_url}")
+    if exclude_patterns is not None:
+        exclude_patterns = [re.compile(x) for x in exclude_patterns]
+
     all_links = get_all_links(
-        starting_url, starting_url, visited=set(), limit=limit
+        starting_url,
+        starting_url,
+        visited=set(),
+        limit=limit,
+        exclude_patterns=exclude_patterns,
     )
     return list(all_links)
+
+
+if __name__ == "__main__":
+    get_links("https://docs.flyte.org/en/latest/", exclude_patterns=["/api/", "/_tags/"])

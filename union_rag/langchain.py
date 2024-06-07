@@ -4,13 +4,14 @@ import itertools
 import os
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 
 from flytekit import (
     task,
     workflow,
     current_context,
     wait_for_input,
+    Artifact,
     ImageSpec,
     Secret,
     Resources,
@@ -25,8 +26,7 @@ from langchain.docstore.document import Document
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores.faiss import FAISS
 
-from union_rag.document import get_links, FlyteDocument, HTML2MarkdownTransformer
-from union_rag.utils import to_slack_mrkdown
+from union_rag.document import get_links, CustomDocument, HTML2MarkdownTransformer
 
 
 image = ImageSpec(
@@ -35,6 +35,10 @@ image = ImageSpec(
     requirements="requirements.txt",
     env={"GIT_PYTHON_REFRESH": "quiet"},
 )
+
+
+KnowledgeBase = Artifact(name="knowledge-base")
+VectorStore = Artifact(name="vector-store")
 
 
 @task(
@@ -47,7 +51,10 @@ def get_documents(
     root_url_tags_mapping: Optional[dict] = None,
     include_union: bool = False,
     limit: Optional[int] = None,
-) -> list[FlyteDocument]:
+    exclude_patterns: Optional[list[str]] = None,
+) -> Annotated[list[CustomDocument], KnowledgeBase]:
+    # TODO: add n_documents or regex exclude parameter to make this task faster
+    # on first run.
 
     if root_url_tags_mapping is None:
         root_url_tags_mapping = {
@@ -60,7 +67,9 @@ def get_documents(
 
     page_transformer = HTML2MarkdownTransformer(root_url_tags_mapping)
     urls = list(
-        itertools.chain(*(get_links(url, limit) for url in root_url_tags_mapping))
+        itertools.chain(
+            *(get_links(url, limit, exclude_patterns) for url in root_url_tags_mapping)
+        )
     )
     loader = AsyncHtmlLoader(urls)
     html = loader.lazy_load()
@@ -89,7 +98,7 @@ def get_documents(
         print(f"Writing document {doc.metadata['source']} to {path}")
         with path.open("w") as f:
             f.write(doc.page_content)
-        documents.append(FlyteDocument(page_filepath=path, metadata=doc.metadata))
+        documents.append(CustomDocument(page_filepath=path, metadata=doc.metadata))
 
     return documents
 
@@ -102,9 +111,10 @@ def get_documents(
     secret_requests=[Secret(key="openai_api_key")],
 )
 def create_search_index(
-    documents: list[FlyteDocument],
-    chunk_size: int,
-) -> FlyteDirectory:
+    documents: list[CustomDocument] = KnowledgeBase.query(),
+    chunk_size: int | None = None,
+) -> Annotated[FlyteDirectory, VectorStore]:
+    chunk_size = chunk_size or 1024
     os.environ["OPENAI_API_KEY"] = current_context().secrets.get("openai_api_key")
     documents = [flyte_doc.to_document() for flyte_doc in documents]
     splitter = CharacterTextSplitter(
@@ -123,13 +133,35 @@ def create_search_index(
     return FlyteDirectory(path=local_path)
 
 
+
+@workflow
+def create_knowledge_base(
+    chunk_size: int = 1024,
+    root_url_tags_mapping: Optional[dict] = None,
+    include_union: bool = False,
+    limit: Optional[int] = None,
+    exclude_patterns: Optional[list[str]] = None,
+) -> FlyteDirectory:
+    docs = get_documents(
+        root_url_tags_mapping=root_url_tags_mapping,
+        include_union=include_union,
+        limit=limit,
+        exclude_patterns=exclude_patterns,
+    )
+    search_index = create_search_index(documents=docs, chunk_size=chunk_size)
+    return search_index
+
+
 @task(
     container_image=image,
     requests=Resources(cpu="2", mem="8Gi"),
     secret_requests=[Secret(key="openai_api_key")],
     enable_deck=True,
 )
-def answer_question(question: str, search_index: FlyteDirectory) -> str:
+def answer_question(
+    question: str,
+    search_index: FlyteDirectory = VectorStore.query(),
+) -> str:
     os.environ["OPENAI_API_KEY"] = current_context().secrets.get("openai_api_key")
     search_index.download()
     index = FAISS.load_local(
@@ -138,7 +170,7 @@ def answer_question(question: str, search_index: FlyteDirectory) -> str:
         allow_dangerous_deserialization=True,
     )
     chain = load_qa_with_sources_chain(
-        ChatOpenAI(
+        ChatOpenAI( 
             model_name="gpt-4o",
             temperature=0.9,
         )
@@ -150,43 +182,25 @@ def answer_question(question: str, search_index: FlyteDirectory) -> str:
         },
     )
     output_text = answer["output_text"]
-
-    output_text = to_slack_mrkdown(output_text)
     return output_text
 
 
 @workflow
 def ask(
     question: str,
-    chunk_size: int = 1024,
-    root_url_tags_mapping: Optional[dict] = None,
-    include_union: bool = False,
-    limit: Optional[int] = None,
+    search_index: FlyteDirectory = VectorStore.query(),
 ) -> str:
-    docs = get_documents(
-        root_url_tags_mapping=root_url_tags_mapping,
-        include_union=include_union,
-        limit=limit,
-    )
-    search_index = create_search_index(documents=docs, chunk_size=chunk_size)
-    answer = answer_question(question=question, search_index=search_index)
-    return answer
+    return answer_question(question=question, search_index=search_index)
 
 
 @workflow
 def ask_with_feedback(
     question: str,
-    chunk_size: int = 1024,
-    root_url_tags_mapping: Optional[dict] = None,
-    include_union: bool = False,
-    limit: Optional[int] = None,
+    search_index: FlyteDirectory = VectorStore.query(),
 ) -> str:
     answer = ask(
         question=question,
-        chunk_size=chunk_size,
-        root_url_tags_mapping=root_url_tags_mapping,
-        include_union=include_union,
-        limit=limit,
+        search_index=search_index,
     )
     feedback = wait_for_input("get-feedback", timeout=timedelta(hours=1), expected_type=str)
     answer >> feedback
