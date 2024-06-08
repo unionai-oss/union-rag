@@ -3,10 +3,9 @@ Union RAG Chat Assistant
 """
 
 import time
-from datetime import timedelta
 
 import streamlit as st
-from openai import OpenAI
+from streamlit_extras.stylable_container import stylable_container
 
 from unionai.remote import UnionRemote
 
@@ -19,6 +18,10 @@ PROMPT_TEMPLATE = """
 if "feedback" not in st.session_state:
     st.session_state.feedback = {}
 
+
+# -----------------
+# Utility functions
+# -----------------
 
 @st.cache_resource
 def get_remote():
@@ -69,39 +72,39 @@ def ask(question: str):
     
     return answer, execution.id.name
 
+# --------
+# Main App
+# --------
+
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # Display chat messages from history on app rerun
-print("feedback", st.session_state.feedback)
 for i, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-    # if message["role"] == "assistant":
-    #     *_, col1, col2 = st.columns(12)
-    #     button_disabled = message["execution_id"] in st.session_state.feedback
-    #     button_selected = st.session_state.feedback.get(message["execution_id"], None)
+    button_disabled = message["execution_id"] in st.session_state.feedback
+    button_selected = st.session_state.feedback.get(message["execution_id"], None)
 
-    #     with col1:
-    #         st.button(
-    #             ":thumbsup:",
-    #             key=f"thumbs-up-{i}",
-    #             on_click=provide_feedback,
-    #             args=[message["execution_id"], "thumbs-up"],
-    #             # disabled=button_disabled,
-    #             type="primary" if button_selected == "thumbs-up" else "secondary",
-    #         )
-    #     with col2:
-    #         st.button(
-    #         ":thumbsdown:",
-    #         key=f"thumbs-down-{i}",
-    #         on_click=provide_feedback,
-    #         args=[message["execution_id"], "thumbs-down"],
-    #         # disabled=button_disabled,
-    #         type="primary" if button_selected == "thumbs-down" else "secondary",
-    #     )
+    if message["role"] == "assistant":
+        st.button(
+            ":thumbsup:",
+            key=f"thumbs-up-{i}",
+            on_click=provide_feedback,
+            args=[message["execution_id"], "thumbs-up"],
+            # disabled=button_disabled,
+            type="primary" if button_selected == "thumbs-up" else "secondary",
+        )
+        st.button(
+            ":thumbsdown:",
+            key=f"thumbs-down-{i}",
+            on_click=provide_feedback,
+            args=[message["execution_id"], "thumbs-down"],
+            # disabled=button_disabled,
+            type="primary" if button_selected == "thumbs-down" else "secondary",
+        )
 
 # Accept user input
 if prompt := st.chat_input("How does Flyte work?"):
@@ -120,21 +123,18 @@ if prompt := st.chat_input("How does Flyte work?"):
     with st.chat_message("assistant"):
         response = st.write(output)
 
-    *_, col1, col2 = st.columns(12)
-    with col1:
-        st.button(
-            ":thumbsup:",
-            key="thumbs-up-latest",
-            on_click=provide_feedback,
-            args=[execution_id, "thumbs-up"],
-        )
-    with col2:
-        st.button(
-            ":thumbsdown:",
-            key="thumbs-down-latest",
-            on_click=provide_feedback,
-            args=[execution_id, "thumbs-up"],
-        )
+    st.button(
+        ":thumbsup:",
+        key="thumbs-up-latest",
+        on_click=provide_feedback,
+        args=[execution_id, "thumbs-up"],
+    )
+    st.button(
+        ":thumbsdown:",
+        key="thumbs-down-latest",
+        on_click=provide_feedback,
+        args=[execution_id, "thumbs-down"],
+    )
 
     st.session_state.messages.append(
         {"role": "assistant", "content": output, "execution_id": execution_id}
