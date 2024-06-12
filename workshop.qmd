@@ -16,6 +16,9 @@ Welcome to the Union.ai Serverless Workshop! In this workshop, we will cover:
 2. If you have not already, sign up for Union Serverless at: https://signup.union.ai/?group=workshop
 3. Navigate to https://serverless.union.ai
 
+**Note:** running the cell below will cause the Colab session to restart due
+to a reinstalled dependency.
+
 ```{python}
 try:
     import google.colab
