@@ -6,7 +6,7 @@ jupyter: python3
 Welcome to the Union.ai Serverless Workshop! In this workshop, we will cover:
 
 1. Setup workspace and connect to Union.ai Serverless.
-2. Creating a GPT4-based retrieval augmented generation (RAG) workflow.
+2. Creating a GPT3.5-based retrieval augmented generation (RAG) workflow.
 3. Deploying a Streamlit app to interact with the Union workflow.
 4. Transitioning to an open weights LLM-based RAG workflow with Ollama.
 
@@ -37,14 +37,8 @@ if IN_COLAB:
 To authenticate with Severless run, and go to the link provided to authenticate your CLI.
 
 ```{python}
-!unionai create login device-flow
-```
-
-Set the configuration and working directory:
-
-```{python}
-%env UNIONAI_CONFIG=/root/.unionai/config.yaml
 %cd /content/union-rag
+!unionai create login device-flow
 ```
 
 To make sure everything is working, run this sample workflow:
@@ -55,14 +49,19 @@ To make sure everything is working, run this sample workflow:
 
 Go to the link provided to see your execution on Union!
 
-## GPT4-based RAG workflow
+## GPT3.5-based RAG workflow
 
 In this first part, we're going to run a RAG workflow defined as a Flyte workflow,
-using LangChain as the LLM pipelining tool and GPT4 as the underlying LLM.
+using LangChain as the LLM pipelining tool and GPT3.5 as the underlying LLM.
 
 ### Create secrets
 
-First, create an OpenAI API key here: https://platform.openai.com/api-keys.
+Follow these steps to use the OpenAI API:
+
+1. [Create an account](https://platform.openai.com/signup) or [login](https://platform.openai.com/login)
+2. Create an OpenAI API key here: https://platform.openai.com/api-keys.
+3. Add credits if you have no balance: https://platform.openai.com/settings/organization/billing/overview.
+   Adding ~$5-10 should be more than enough for this workshop.
 
 Then, create a secret on Union with:
 
@@ -128,7 +127,7 @@ question:
 ```
 
 There are a few things to note in this workflow:
-- We're using the `openai_api_key` secret that we made earlier to use GPT4.
+- We're using the `openai_api_key` secret that we made earlier to use GPT3.5.
 - We rehydrate the `FAISS` vector store to use for RAG.
 - We create question-answering pipeline with `load_qa_with_sources_chain` using LangChain
 
@@ -232,18 +231,18 @@ to answer our question:
 !unionai run --copy-all --remote union_rag/langchain.py ask_ollama --question 'what is flytekit?'
 ```
 
-Why does this take a lot longer than the GPT4 RAG workflow?
+Why does this take a lot longer than the GPT3.5 RAG workflow?
 
 - We're spinning up an ephemeral T4 GPU, starting an Ollama server, then running our RAG task.
 - With a regular `@task` this resource is spun down after the task is complete
-- The GPT4 workflow simply does an API call on a Union CPU resource.
+- The GPT3.5 workflow simply does an API call on a Union CPU resource.
 - We're working on ways to initialize long-running resources to we don't incur
   additional overhead due to ephemeral resources (stay tuned!).
 
 ### Customizing the prompts
 
 As you can see, the smaller LLMs are less useful than the off-the-shelf SOTA
-models like GPT4 that you can access via an API.
+models like GPT3.5 that you can access via an API.
 
 The iterative part of the RAG lifecycle is to do prompt engineering to customize
 how the RAG system interprets the retrieved information to help it answer your
@@ -262,10 +261,16 @@ that we're using to implement our RAG system.
 
 In this workshop, you learned how to:
 - Set up a development environment on Union Serverless
-- Run a RAG workflow using Langchain and GPT4
+- Run a RAG workflow using Langchain and GPT3.5
 - Deploy a Streamlit app that interacts with Union Serverless
-- Swap out GPT4 for open weights models like `all-MiniLM-L6-v2` for sentence
+- Swap out GPT3.5 for open weights models like `all-MiniLM-L6-v2` for sentence
   embeddings and `phi3` as the response model.
 - Customizing prompts via `PromptTemplate`s in Langchain.
 
 Thank you for attending!
+
+
+## Bonus: Create a Slackbot
+
+If you're interested in high-latency chat use cases, check out the slack app
+deployment section in the repo [README](https://github.com/unionai-oss/union-rag?tab=readme-ov-file#slack-app-deployment).

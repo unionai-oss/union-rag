@@ -3,7 +3,7 @@
 👋 Welcome to the Union Serverless workshop! In this workshop we will cover:
 
 1. Setting up and connecting to Union.ai serverless.
-2. Launch a RAG workflow using `flytekit`, `langchain`, and GPT4.
+2. Launch a RAG workflow using `flytekit`, `langchain`, and GPT3.5.
 3. Interact with Union Serverless through a Streamlit App.
 4. Refactoring your RAG workflow to use open weights LLMs.
 
