@@ -47,6 +47,9 @@ Go to the link provided to see your execution on Union!
 
 ## GPT4-based RAG workflow
 
+In this first part, we're going to run a RAG workflow defined as a Flyte workflow,
+using LangChain as the LLM pipelining tool and GPT4 as the underlying LLM.
+
 ### Create secrets
 
 First, create an OpenAI API key here: https://platform.openai.com/api-keys.
@@ -72,21 +75,61 @@ delete the secret and try again:
 
 ### Create the knowledge base
 
+The first stage in building a RAG application is to create knowledge base that
+we represent as a vector store.
+
 ```{python}
 !unionai run --copy-all --remote union_rag/langchain.py create_knowledge_base \
     --exclude_patterns '["/api/", "/_tags/"]' \
-    --limit 250
+    --limit 100
 ```
 
-Let's review the workflow we're going to create.
+This step will that about 5-10 minutes, so in the mean time, let's review a few
+things about this part of the workflow.
+
+This workflow highlights a few important Flyte features:
+- `ImageSpec`: abstracting the Docker container
+- Tasks: the core building block of Flyte
+- Workflows: composing building blocks together
+- Caching and cache versions
+- Resource requests
+
+And it also highlights Union features:
+- Artifacts and partitioning
+- Remote image-building service
+
+Let's also explore the UI to get some insights into what's going on in this workflow:
+- List view
+- Graph view
+- Timeline view
+- View utilization
+- Live logs
+
+Once the `create_knowledge_base` workflow is complete, we can take a look at the
+artifact that was created through the UI.
 
 ### Ask a Flyte-related question
 
-We can 
+We can then use the `VectorStore` knowledge base we created to ask a flyte-related
+question:
 
 ```{python}
 !unionai run --copy-all --remote union_rag/langchain.py ask --question 'what is flytekit?'
 ```
+
+Evaluation is also a big part of the RAG lifecycle. To do this, it's helpful to
+collect feedback. We can use gate nodes to do this:
+
+```{python}
+!unionai run --copy-all --remote union_rag/langchain.py ask_with_feedback --question 'what is flytekit?'
+```
+
+Go to the execution on the UI and you'll see the `ask_with_feedback` workflow
+has a step in the end where you can give it some feedback. In this case, it's
+an unstructured text field, so you can say something like "thumbs-up" or "thumbs-down".
+
+In the next step of this workshop, we'll see how you can interact with this
+RAG workflow through a Streamlit app.
 
 ## Build a Streamlit App
 
@@ -96,7 +139,7 @@ First, create a Union API key:
 !unionai create app streamlit-rag-app
 ```
 
-Save the API key somewhere secure.
+Save the API key somewhere secure!
 
 Then, follow these steps to deploy the streamlit app that you can use to interact
 with the RAG workflow:
@@ -115,24 +158,74 @@ with the RAG workflow:
 - Then click **Deploy!**
 
 After a few seconds, you should be redirected to the streamlit app as it builds.
+You should see a chat input box in the bottom of the screen.
+
+Try typing in a flyte-related question! Note: responses will take about 20-30
+seconds.
+
+Let's go through how this application works:
+- It uses `UnionRemote` to connect to Union Serverless.
+- When a user types in a question in the chat box, this kicks off an with `UnionRemote.execute`.
+- When the response comes back, we keep track of the execution ids associated
+  with each response.
+- When a users clicks on one of the 👍 or 👎 buttons, we use `UnionRemote.set_signal`
+  to programmatically provide feedback on the response.
 
 
 ## Ollama-based RAG workflow
+
+First, we need to re-create the knowledge base to use an open-weights embedder.
+In this case, we'll use the `all-MiniLM-L6-v2` sentence transformer available
+through Hugging Face.
 
 ```{python}
 !unionai run --copy-all --remote union_rag/langchain.py create_knowledge_base \
     --exclude_patterns '["/api/", "/_tags/"]' \
     --embedding_type "huggingface" \
-    --limit 250
+    --limit 100
 ```
 
-### Re-create the knowledge base
+As we wait for this new knowledge base to build, we can let's dive into how
+we use `Artifact`s and partitions to manage our vector store:
+
+- We use the `partition_keys` argument to define the artifact partitions
+- We define the partitioned artifact as a task output with `Artifact(partition=Inputs.arg)`
+- We can consume artifact partitions in downstream workflow with the `Artifact.query(partition="<value>")`
+
+It's also important to know how we're setting up the `Ollama` dependencies and
+server using `ImageSpec` and task decorators:
+
+- The use the 
+
+Next, we invoke the `ask_ollama` workflow to run a RAG workflow that uses `phi3`
+to answer our question:
 
 ```{python}
 !unionai run --copy-all --remote union_rag/langchain.py ask_ollama --question 'what is flytekit?'
 ```
 
-## Ask a Flyte-related question
+### Customizing the prompts
 
+As you can see, the smaller LLMs are less useful than the off-the-shelf SOTA
+models like GPT4 that you can access via an API.
 
-Thank you for attending this workshop!
+The iterative part of the RAG lifecycle is to do prompt engineering to customize
+how the RAG system interprets the retrieved information to help it answer your
+question.
+
+This involves creating a [RAG Evaluation pipeline](https://huggingface.co/learn/cookbook/en/rag_evaluation),
+which we won't have time to create in todays workshop, but to end, let's go
+through how we can customize the prompts that are using in the langchain pipeline
+that we're using to implement our RAG system.
+
+## Conclusion
+
+In this workshop, you learned how to:
+- Set up a development environment on Union Serverless
+- Run a RAG workflow using Langchain and GPT4
+- Deploy a Streamlit app that interacts with Union Serverless
+- Swap out GPT4 for open weights models like `all-MiniLM-L6-v2` for sentence
+  embeddings and `phi3` as the response model.
+- Customizing prompts via `PromptTemplate`s in Langchain.
+
+Thank you for attending!

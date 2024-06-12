@@ -5,3 +5,10 @@ install-jupytext:
 .PHONY: notebook
 notebook: install-jupytext
 	jupytext --to ipynb workshop.qmd
+
+.PHONY: install-uv
+install-uv:
+	pip install uv
+
+requirements.lock.txt: install-uv
+	uv pip compile requirements.txt -o requirements.lock.txt
