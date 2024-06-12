@@ -194,9 +194,9 @@ def create_knowledge_base(
     return search_index
 
 
-# ---------------
-# GPT3.5 workflow
-# ---------------
+# ------------
+# GPT workflow
+# ------------
 
 @task(
     container_image=image,
@@ -228,7 +228,7 @@ def answer_question(
 
     chain = load_qa_with_sources_chain(
         ChatOpenAI( 
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4o",
             temperature=0.9,
         ),
         **kwargs,
