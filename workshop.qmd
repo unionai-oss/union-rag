@@ -56,14 +56,13 @@ using LangChain as the LLM pipelining tool and GPT3.5 as the underlying LLM.
 
 ### Create secrets
 
-Follow these steps to use the OpenAI API:
+Let's create a Union secret for an OpenAI API key. The workshop runner will now
+provide a limited key for the purposes of this workshop.
 
-1. [Create an account](https://platform.openai.com/signup) or [login](https://platform.openai.com/login)
-2. Create an OpenAI API key here: https://platform.openai.com/api-keys.
-3. Add credits if you have no balance: https://platform.openai.com/settings/organization/billing/overview.
-   Adding ~$5-10 should be more than enough for this workshop.
+> **Note**: Don't get too excited 🙂, this key can only use `gpt-3.5-turbo` and
+> has a limit of $50. We will delete this key after the workshop.
 
-Then, create a secret on Union with:
+Once you have the key, create a secret on Union with:
 
 ```{python}
 !unionai create secret openai_api_key
