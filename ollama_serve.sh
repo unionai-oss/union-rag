@@ -10,6 +10,7 @@ terminate_ollama() {
     kill $pid
 }
 
+# kill ollama server if it's already running
 terminate_ollama
 OLLAMA_MODELS=$2 ollama serve &
 
