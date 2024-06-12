@@ -1,0 +1,46 @@
+---
+jupyter: python3
+---
+# Union.ai Serverless Workshop
+
+Welcome to the Union.ai Serverless Workshop! In this workshop, we will cover:
+
+1. Setup workspace and connect to Union.ai Serverless
+2. Launch a simple ML workflow & get familiar with the Python SDK
+3. LLM tracking workflow using HuggingFace and Weights & Bias.
+4. Explore models using Union hosted VSCode
+
+## Setup Workspace
+
+1. If you are not signed into Google, sign in by clicking the "Sign in" on the upper right of this page.
+2. If you have not already, sign up for Union Serverless at: https://signup.union.ai/?group=workshop
+3. Navigate to https://serverless.union.ai
+
+```{python}
+try:
+    import google.colab
+    IN_COLAB = True
+except ImportError:
+    IN_COLAB = False
+
+if IN_COLAB:
+    !git clone https://github.com/unionai-oss/union-rag.git
+    %cd union-rag
+    %pip install -r requirements.lock.txt
+```
+
+## Authenticate on Codespaces or Colab
+
+To authenticate with Severless run, and go to the link provided to authenticate your CLI.
+
+```{python}
+!unionai create login device-flow
+```
+
+To make sure everything is working, run this sample workflow:
+
+```{python}
+!unionai run --remote _workshop/starter.py main
+```
+
+Go to the link provided to see your execution on Union!

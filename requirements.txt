@@ -3,12 +3,14 @@ faiss-cpu
 flytekitplugins-deck-standard
 gitpython
 langchain
-langchain-community
+langchain-community==0.0.20
 langchain-openai
 markdownify
 mashumaro
 openai
 playwright
 requests
-unionai==0.1.11
+sentence_transformers
 tiktoken
+torch==2.0.1
+unionai==0.1.27

@@ -4,14 +4,20 @@
 
 Sign up for a Union Serverless account here: https://signup.union.ai/?group=workshop
 
+Go to the Google Colab notebook: `<link needed>`
+
 ## Part 1: Running the RAG Workflow with Union Serverless
+
+TODO: setup secrets
+TODO: use codespaces as dev environment
+TODO: api key
 
 Create the knowledge base artifact:
 
 ```bash
 unionai run --copy-all --remote union_rag/langchain.py create_knowledge_base \
     --exclude_patterns '["/api/", "/_tags/"]' \
-    --limit 100
+    --limit 250
 ```
 
 Then run the question to ask questions to the RAG model:
@@ -26,7 +32,21 @@ We can even run a workflow where we can provide feedback:
 unionai run --copy-all --remote union_rag/langchain.py ask_with_feedback --question 'what is flytekit?'
 ```
 
-## Part 2: Creating a Chat UI with Streamlit
+## Part 2: Use Open Weights Models
+
+```bash
+unionai run --copy-all --remote union_rag/langchain.py create_knowledge_base \
+    --exclude_patterns '["/api/", "/_tags/"]' \
+    --embedding_type "huggingface" \
+    --limit 250
+```
+
+```bash
+unionai run --copy-all --remote union_rag/langchain.py ask_ollama --question 'what is flytekit?'
+```
+
+
+## Part 3: Creating a Chat UI with Streamlit
 
 Now we're going to interact with this workflow through a chat interface through
 streamlit.
