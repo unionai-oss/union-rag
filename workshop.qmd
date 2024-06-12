@@ -40,11 +40,14 @@ To authenticate with Severless run, and go to the link provided to authenticate 
 !unionai create login device-flow
 ```
 
-To make sure everything is working, run this sample workflow:
+Set the configuration and working directory:
 
 ```{python}
+%env UNIONAI_CONFIG=/root/.unionai/config.yaml
 %cd /content/union-rag
 ```
+
+To make sure everything is working, run this sample workflow:
 
 ```{python}
 !unionai run --remote _workshop/starter.py main
