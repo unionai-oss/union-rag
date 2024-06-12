@@ -40,6 +40,10 @@ To authenticate with Severless run, and go to the link provided to authenticate 
 To make sure everything is working, run this sample workflow:
 
 ```{python}
+%cd /content/union-rag
+```
+
+```{python}
 !unionai run --remote _workshop/starter.py main
 ```
 
