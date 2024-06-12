@@ -1,0 +1,7 @@
+beautifulsoup4
+langchain-community
+markdownify
+mashumaro
+playwright
+requests
+unionai==0.1.27

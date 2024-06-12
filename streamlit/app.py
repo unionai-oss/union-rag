@@ -9,10 +9,8 @@ import streamlit as st
 from unionai.remote import UnionRemote
 
 st.title("Union RAG Chat Assistant")
+st.write("Ask me anything about Flyte!")
 
-
-PROMPT_TEMPLATE = """
-"""
 
 if "feedback" not in st.session_state:
     st.session_state.feedback = {}

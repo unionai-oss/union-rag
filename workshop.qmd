@@ -26,7 +26,7 @@ except ImportError:
 if IN_COLAB:
     !git clone https://github.com/unionai-oss/union-rag.git
     %cd union-rag
-    %pip install -r requirements.lock.txt
+    %pip install -r _workshop/requirements.lock.txt
 ```
 
 ## Authenticate on Colab
@@ -117,6 +117,17 @@ question:
 !unionai run --copy-all --remote union_rag/langchain.py ask --question 'what is flytekit?'
 ```
 
+There are a few things to note in this workflow:
+- We're using the `openai_api_key` secret that we made earlier to use GPT4.
+- We rehydrate the `FAISS` vector store to use for RAG.
+- We create question-answering pipeline with `load_qa_with_sources_chain` using LangChain
+
+We also use `Artifact`s and partitions to consume the correct vector store:
+
+- We use the `partition_keys` argument to define the artifact partitions
+- We define the partitioned artifact as a task output with `Artifact(partition=Inputs.arg)`
+- We can consume artifact partitions in downstream workflow with the `Artifact.query(partition="<value>")`
+
 Evaluation is also a big part of the RAG lifecycle. To do this, it's helpful to
 collect feedback. We can use gate nodes to do this:
 
@@ -185,17 +196,24 @@ through Hugging Face.
     --limit 100
 ```
 
-As we wait for this new knowledge base to build, we can let's dive into how
-we use `Artifact`s and partitions to manage our vector store:
+As we wait for this new knowledge base to build, we can let's dive into a few
+aspects of this workflow that are worth noting.
 
-- We use the `partition_keys` argument to define the artifact partitions
-- We define the partitioned artifact as a task output with `Artifact(partition=Inputs.arg)`
-- We can consume artifact partitions in downstream workflow with the `Artifact.query(partition="<value>")`
+Since we're using Union to host an Ollama server, we need to provision a GPU
+to use it effectively. We do this by:
+
+- Specifying the `requests=Resources(cpu="4", mem="24Gi", gpu="1")` argument.
+- Defining the `accelerator=accelerators.T4` argument.
 
 It's also important to know how we're setting up the `Ollama` dependencies and
 server using `ImageSpec` and task decorators:
 
-- The use the 
+- We use the `with_apt_packages` to install additional dependencies that we need
+  to use Ollama.
+- We use the `with_commands` to invoke additional commands to install Ollama and
+  preload the llama3 model into the container.
+- The `ollama_server` task function decorator starts an Ollama server to run
+  the RAG pipeline and tears it down when it's done.
 
 Next, we invoke the `ask_ollama` workflow to run a RAG workflow that uses `phi3`
 to answer our question:
@@ -203,6 +221,14 @@ to answer our question:
 ```{python}
 !unionai run --copy-all --remote union_rag/langchain.py ask_ollama --question 'what is flytekit?'
 ```
+
+Why does this take a lot longer than the GPT4 RAG workflow?
+
+- We're spinning up an ephemeral T4 GPU, starting an Ollama server, then running our RAG task.
+- With a regular `@task` this resource is spun down after the task is complete
+- The GPT4 workflow simply does an API call on a Union CPU resource.
+- We're working on ways to initialize long-running resources to we don't incur
+  additional overhead due to ephemeral resources (stay tuned!).
 
 ### Customizing the prompts
 
@@ -217,6 +243,10 @@ This involves creating a [RAG Evaluation pipeline](https://huggingface.co/learn/
 which we won't have time to create in todays workshop, but to end, let's go
 through how we can customize the prompts that are using in the langchain pipeline
 that we're using to implement our RAG system.
+
+```{python}
+!unionai run --copy-all --remote union_rag/langchain.py ask_ollama --question 'what is flytekit?' --prompt_template "$(cat PROMPT_TEMPLATE.txt)"
+```
 
 ## Conclusion
 
