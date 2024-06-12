@@ -11,4 +11,4 @@
 
 Head over to the workshop notebook on Google Colab:
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)]([{COLAB_URL}/{REPO_URL}/{output_path}](https://colab.research.google.com/github/unionai-oss/union-rag/blob/main/workshop.ipynb))
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/unionai-oss/union-rag/blob/main/workshop.ipynb)
