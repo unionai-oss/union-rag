@@ -2,6 +2,9 @@
 
 UnionAI-native RAG applications.
 
+> [!NOTE]
+> If you're here for the LLM RAG workshop, go [here](./WORKSHOP.md).
+
 ## Setup
 
 ```bash
