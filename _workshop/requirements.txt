@@ -1,4 +1,5 @@
 beautifulsoup4
+keyrings.alt
 langchain-community
 markdownify
 mashumaro
