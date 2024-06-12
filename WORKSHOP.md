@@ -1,6 +1,11 @@
 # LLM RAG Workshop
 
-👋 Welcome to the Union Serverless workshop! In this workshop we will cover:
+👋 Welcome to the Union Serverless workshop!
+
+- Reach this page at: https://go.union.ai/llm-rag-workshop
+- Join the slack channel: https://slack.flyte.org/
+
+In this workshop we will cover:
 
 1. Setting up and connecting to Union.ai serverless.
 2. Launch a RAG workflow using `flytekit`, `langchain`, and GPT.

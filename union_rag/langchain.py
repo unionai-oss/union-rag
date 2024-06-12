@@ -228,7 +228,7 @@ def answer_question(
 
     chain = load_qa_with_sources_chain(
         ChatOpenAI( 
-            model_name="gpt-4o",
+            model_name="gpt-4-turbo",
             temperature=0.9,
         ),
         **kwargs,
