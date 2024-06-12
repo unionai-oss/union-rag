@@ -59,9 +59,8 @@ using LangChain as the LLM pipelining tool and GPT as the underlying LLM.
 Let's create a Union secret for an OpenAI API key. The workshop runner will now
 provide a limited key for the purposes of this workshop.
 
-> **Note**: Don't get too excited 🙂, this key can only use `gpt-3.5-turbo` and
-> has a limit of $50. We will delete this key after the workshop. Alternatively,
-> you can use your own API key.
+> **Note**: Don't get too excited 🙂, this key has a limit of $50. We will delete
+> this key after the workshop. Alternatively, you can use your own API key.
 
 Once you have the key, create a secret on Union with:
 
