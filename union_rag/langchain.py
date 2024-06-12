@@ -45,12 +45,14 @@ image = ImageSpec(
     source_root=".",
 )
 
+OLLAMA_MODEL_NAME = "llama3"
+
 image_ollama = (
     image
     .with_apt_packages(["lsof"])
     .with_commands([
         "sh ./ollama_install.sh",
-        "sh ./ollama_serve.sh phi3 /root/.ollama/models",
+        f"sh ./ollama_serve.sh {OLLAMA_MODEL_NAME} /root/.ollama/models",
     ])
     .force_push()
 )
@@ -261,7 +263,7 @@ def answer_question_ollama(
     )
     chain = load_qa_with_sources_chain(
         ChatOllama(
-            model="phi3",
+            model=OLLAMA_MODEL_NAME,
             temperature=0.9,
         )
     )
