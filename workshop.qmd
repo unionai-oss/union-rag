@@ -5,10 +5,10 @@ jupyter: python3
 
 Welcome to the Union.ai Serverless Workshop! In this workshop, we will cover:
 
-1. Setup workspace and connect to Union.ai Serverless
-2. Launch a simple ML workflow & get familiar with the Python SDK
-3. LLM tracking workflow using HuggingFace and Weights & Bias.
-4. Explore models using Union hosted VSCode
+1. Setup workspace and connect to Union.ai Serverless.
+2. Creating a GPT4-based retrieval augmented generation (RAG) workflow.
+3. Deploying a Streamlit app to interact with the Union workflow.
+4. Transitioning to an open weights LLM-based RAG workflow with Ollama.
 
 ## Setup Workspace
 
@@ -29,7 +29,7 @@ if IN_COLAB:
     %pip install -r requirements.lock.txt
 ```
 
-## Authenticate on Codespaces or Colab
+## Authenticate on Colab
 
 To authenticate with Severless run, and go to the link provided to authenticate your CLI.
 
@@ -44,3 +44,95 @@ To make sure everything is working, run this sample workflow:
 ```
 
 Go to the link provided to see your execution on Union!
+
+## GPT4-based RAG workflow
+
+### Create secrets
+
+First, create an OpenAI API key here: https://platform.openai.com/api-keys.
+
+Then, create a secret on Union with:
+
+```{python}
+!unionai create secret openai_api_key
+```
+
+To see all of your secrets, run:
+
+```{python}
+!unionai get secret
+```
+
+If you are running into an issue with secrets, uncomment the following code to
+delete the secret and try again:
+
+```{python}
+# !unionai delete secret openai_api_key
+```
+
+### Create the knowledge base
+
+```{python}
+!unionai run --copy-all --remote union_rag/langchain.py create_knowledge_base \
+    --exclude_patterns '["/api/", "/_tags/"]' \
+    --limit 250
+```
+
+Let's review the workflow we're going to create.
+
+### Ask a Flyte-related question
+
+We can 
+
+```{python}
+!unionai run --copy-all --remote union_rag/langchain.py ask --question 'what is flytekit?'
+```
+
+## Build a Streamlit App
+
+First, create a Union API key:
+
+```{python}
+!unionai create app streamlit-rag-app
+```
+
+Save the API key somewhere secure.
+
+Then, follow these steps to deploy the streamlit app that you can use to interact
+with the RAG workflow:
+
+- Sign up for an account on streamlit cloud: https://share.streamlit.io/signup
+- Fork the `union-rag` repo: https://github.com/unionai-oss/union-rag
+- Click on **Create App** > **Yup, I have an app**, then add the information
+  needed to deploy:
+  - **Repository**: `<github_username>/union-rag`
+  - **Branch**: `main`
+  - **Main file path**: streamlit/app.py
+- Under **Advanced settings**, provide the Union secret:
+  ```
+  UNIONAI_SERVERLESS_API_KEY = "<MY_SECRET>"
+  ```
+- Then click **Deploy!**
+
+After a few seconds, you should be redirected to the streamlit app as it builds.
+
+
+## Ollama-based RAG workflow
+
+```{python}
+!unionai run --copy-all --remote union_rag/langchain.py create_knowledge_base \
+    --exclude_patterns '["/api/", "/_tags/"]' \
+    --embedding_type "huggingface" \
+    --limit 250
+```
+
+### Re-create the knowledge base
+
+```{python}
+!unionai run --copy-all --remote union_rag/langchain.py ask_ollama --question 'what is flytekit?'
+```
+
+## Ask a Flyte-related question
+
+
+Thank you for attending this workshop!

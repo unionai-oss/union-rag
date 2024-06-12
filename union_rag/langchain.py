@@ -1,12 +1,13 @@
 """Flyte attendant workflow."""
 
+import asyncio
 import itertools
 import os
 import time
 from datetime import timedelta
 from functools import wraps
 from pathlib import Path
-from subprocess import Popen, run
+from subprocess import Popen
 from typing import Annotated, Optional
 
 from flytekit import (
@@ -19,6 +20,7 @@ from flytekit import (
     Secret,
     Resources,
 )
+from flytekit.core.artifact import Inputs
 from flytekit.extras import accelerators
 from flytekit.types.directory import FlyteDirectory
 
@@ -55,7 +57,7 @@ image_ollama = (
 
 
 KnowledgeBase = Artifact(name="knowledge-base")
-VectorStore = Artifact(name="vector-store")
+VectorStore = Artifact(name="vector-store", partition_keys=["embedding_type"])
 
 
 @task(
@@ -115,6 +117,11 @@ def get_documents(
             f.write(doc.page_content)
         documents.append(CustomDocument(page_filepath=path, metadata=doc.metadata))
 
+    # create a new event loop to avoid asyncio RuntimeError. Somehow langchain
+    # will close the event loop and not allow further async operations
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     return documents
 
 
@@ -130,7 +137,7 @@ def create_search_index(
     documents: list[CustomDocument] = KnowledgeBase.query(),
     chunk_size: int | None = None,
     embedding_type: str = "openai",
-) -> Annotated[FlyteDirectory, VectorStore]:
+) -> Annotated[FlyteDirectory, VectorStore(embedding_type=Inputs.embedding_type)]:
 
     chunk_size = chunk_size or 1024
     os.environ["OPENAI_API_KEY"] = current_context().secrets.get("openai_api_key")
@@ -144,7 +151,7 @@ def create_search_index(
 
         embeddings = OpenAIEmbeddings()
     elif embedding_type == "huggingface":
-        from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings
+        from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
@@ -192,7 +199,7 @@ def create_knowledge_base(
 )
 def answer_question(
     question: str,
-    search_index: FlyteDirectory = VectorStore.query(),
+    search_index: FlyteDirectory = VectorStore.query(embedding_type="openai"),
 ) -> str:
     os.environ["OPENAI_API_KEY"] = current_context().secrets.get("openai_api_key")
     search_index.download()
@@ -242,9 +249,9 @@ def ollama_server(fn):
 @ollama_server
 def answer_question_ollama(
     question: str,
-    search_index: FlyteDirectory = VectorStore.query(),
+    search_index: FlyteDirectory = VectorStore.query(embedding_type="huggingface"),
 ) -> str:
-    from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings
+    from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 
     search_index.download()
     index = FAISS.load_local(
@@ -271,23 +278,15 @@ def answer_question_ollama(
 @workflow
 def ask(
     question: str,
-    search_index: FlyteDirectory = VectorStore.query(),
+    search_index: FlyteDirectory = VectorStore.query(embedding_type="openai"),
 ) -> str:
     return answer_question(question=question, search_index=search_index)
 
 
 @workflow
-def ask_ollama(
-    question: str,
-    search_index: FlyteDirectory = VectorStore.query(),
-) -> str:
-    return answer_question_ollama(question=question, search_index=search_index)
-
-
-@workflow
 def ask_with_feedback(
     question: str,
-    search_index: FlyteDirectory = VectorStore.query(),
+    search_index: FlyteDirectory = VectorStore.query(embedding_type="openai"),
 ) -> str:
     answer = ask(
         question=question,
@@ -296,3 +295,11 @@ def ask_with_feedback(
     feedback = wait_for_input("get-feedback", timeout=timedelta(hours=1), expected_type=str)
     answer >> feedback
     return feedback
+
+
+@workflow
+def ask_ollama(
+    question: str,
+    search_index: FlyteDirectory = VectorStore.query(embedding_type="huggingface"),
+) -> str:
+    return answer_question_ollama(question=question, search_index=search_index)

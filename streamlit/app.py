@@ -5,7 +5,6 @@ Union RAG Chat Assistant
 import time
 
 import streamlit as st
-from streamlit_extras.stylable_container import stylable_container
 
 from unionai.remote import UnionRemote
 
