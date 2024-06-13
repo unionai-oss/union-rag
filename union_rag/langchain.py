@@ -42,7 +42,8 @@ image_ollama = (
     image
     .with_apt_packages(["lsof"])
     .with_commands([
-        "sh ./ollama_install.sh",
+        "wget https://ollama.com/install.sh",
+        "sh ./install.sh",
         f"sh ./ollama_serve.sh {OLLAMA_MODEL_NAME} /root/.ollama/models",
     ])
 )
