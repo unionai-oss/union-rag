@@ -3,7 +3,8 @@
 👋 Welcome to the Union Serverless workshop!
 
 - Reach this page at: https://go.union.ai/llm-rag-workshop
-- Join the slack channel: https://slack.flyte.org/
+- Join the slack org: https://slack.flyte.org/
+- Visit the workshop channel: https://flyte-org.slack.com/archives/C077VNW4QG3
 
 In this workshop we will cover:
 
