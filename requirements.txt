@@ -13,4 +13,4 @@ playwright
 requests
 sentence_transformers
 tiktoken
-unionai==0.1.25
+unionai==0.1.34

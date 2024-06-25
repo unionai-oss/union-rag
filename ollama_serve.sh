@@ -14,7 +14,7 @@ terminate_ollama() {
 terminate_ollama
 OLLAMA_MODELS=$2 ollama serve &
 
-sleep 10
+sleep 12
 
 ollama pull $model_name
 terminate_ollama
