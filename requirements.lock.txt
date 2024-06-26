@@ -57,6 +57,7 @@ certifi==2024.6.2
     #   httpcore
     #   httpx
     #   requests
+    #   sentry-sdk
 cffi==1.16.0
     # via
     #   azure-datalake-store
@@ -545,6 +546,8 @@ sentence-transformers==3.0.1
     # via
     #   -r requirements.txt
     #   langchain-huggingface
+sentry-sdk==2.7.0
+    # via unionai
 six==1.16.0
     # via
     #   asttokens
@@ -591,7 +594,9 @@ tokenizers==0.19.1
     #   langchain-huggingface
     #   transformers
 torch==2.0.1
-    # via sentence-transformers
+    # via
+    #   -r requirements.txt
+    #   sentence-transformers
 tqdm==4.66.4
     # via
     #   huggingface-hub
@@ -632,7 +637,7 @@ typing-inspect==0.9.0
     # via dataclasses-json
 tzdata==2024.1
     # via pandas
-unionai==0.1.25
+unionai==0.1.38
     # via -r requirements.txt
 urllib3==2.2.1
     # via
@@ -640,6 +645,7 @@ urllib3==2.2.1
     #   docker
     #   flytekit
     #   requests
+    #   sentry-sdk
 visions==0.7.6
     # via ydata-profiling
 wcwidth==0.2.13
