@@ -380,7 +380,7 @@ typing-extensions==4.12.2
     #   typing-inspect
 typing-inspect==0.9.0
     # via dataclasses-json
-unionai==0.1.27
+unionai==0.1.38
     # via -r _workshop/requirements.txt
 urllib3==2.2.1
     # via
