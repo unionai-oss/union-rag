@@ -92,10 +92,15 @@ we represent as a vector store.
     --limit 100
 ```
 
-This step will that about 5-10 minutes, so in the mean time, let's review a few
-things about this part of the workflow.
+This step will that about 5-10 minutes, so in the mean time, let's review how a
+RAG application works:
 
-This workflow highlights a few important Flyte features:
+![RAG application](./static/rag-application.png)
+
+This workflow builds the knowledge base part of the RAG application, and highlights
+a few important capabilities that makes it easy for us to a production-grade
+RAG app:
+
 - `ImageSpec`: abstracting the Docker container
 - Tasks: the core building block of Flyte
 - Workflows: composing building blocks together
