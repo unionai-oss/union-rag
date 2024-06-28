@@ -92,7 +92,7 @@ we represent as a vector store.
     --limit 100
 ```
 
-This step will that about 5-10 minutes, so in the mean time, let's review how a
+This step will take about 5-10 minutes, so in the mean time, let's review how a
 RAG application works:
 
 ![RAG application](./static/rag-application.png)
@@ -175,10 +175,17 @@ with the RAG workflow:
   - **Repository**: `<github_username>/union-rag`
   - **Branch**: `main`
   - **Main file path**: streamlit/app.py
-- Under **Advanced settings**, provide the Union secret:
+
+  ![streamlit-advanced](./static/streamlit-deploy-init.png){width=350}
+- Click **Advanced settings**
+
+  ![streamlit-advanced](./static/streamlit-deploy.png){width=350}
+- Then provide the Union secret under the **Secrets** input field:
   ```
   UNIONAI_SERVERLESS_API_KEY = "<MY_SECRET>"
   ```
+
+  ![streamlit-advanced](./static/streamlit-secrets.png){width=350}
 - Then click **Deploy!**
 
 After a few seconds, you should be redirected to the streamlit app as it builds.

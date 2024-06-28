@@ -52,6 +52,23 @@ image_ollama = (
 KnowledgeBase = Artifact(name="knowledge-base")
 VectorStore = Artifact(name="vector-store", partition_keys=["embedding_type"])
 
+DEFAULT_PROMPT_TEMPLATE = """You are a helpful chat assistant that is an expert in Flyte and the flytekit sdk.
+Create a final answer with references ("SOURCES").
+If you don't know the answer, just say that you don't know. Don't try to make up an answer.
+If the QUESTION is not relevant to Flyte or flytekit, just say that you're not able
+to answer any questions that are not related to Flyte or flytekit.
+ALWAYS return a "SOURCES" part in your answer.
+
+SOURCES:
+
+QUESTION: {question}
+=========
+{summaries}
+=========
+FINAL ANSWER:
+
+"""
+
 
 
 # ---------------------
@@ -223,16 +240,15 @@ def answer_question(
         allow_dangerous_deserialization=True,
     )
 
-    kwargs = {}
-    if prompt_template is not None:
-        kwargs["prompt"] = PromptTemplate.from_template(prompt_template)
 
     chain = load_qa_with_sources_chain(
         ChatOpenAI( 
             model_name="gpt-4-turbo",
             temperature=0.9,
         ),
-        **kwargs,
+        prompt=PromptTemplate.from_template(
+            prompt_template or DEFAULT_PROMPT_TEMPLATE
+        ),
     )
     answer = chain.invoke(
         {
@@ -316,16 +332,15 @@ def answer_question_ollama(
         HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2"),
         allow_dangerous_deserialization=True,
     )
-    kwargs = {}
-    if prompt_template is not None:
-        kwargs["prompt"] = PromptTemplate.from_template(prompt_template)
 
     chain = load_qa_with_sources_chain(
         ChatOllama(
             model=OLLAMA_MODEL_NAME,
             temperature=0.9,
         ),
-        **kwargs,
+        prompt=PromptTemplate.from_template(
+            prompt_template or DEFAULT_PROMPT_TEMPLATE
+        ),
     )
     answer = chain.invoke(
         {
