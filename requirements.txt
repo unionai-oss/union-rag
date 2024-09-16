@@ -14,4 +14,4 @@ requests
 sentence_transformers
 tiktoken
 torch==2.0.1
-unionai==0.1.38
+unionai==0.1.74

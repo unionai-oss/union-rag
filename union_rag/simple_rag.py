@@ -1,4 +1,4 @@
-"""Flyte attendant workflow."""
+"""Union and Flyte chat assistant workflow."""
 
 import asyncio
 import itertools

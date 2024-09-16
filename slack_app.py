@@ -56,7 +56,7 @@ def answer_question(body, say):
     text = re.sub("<@.+>", "", event["text"]).strip()
 
     remote = UnionRemote()
-    workflow = remote.fetch_workflow(name="union_rag.langchain.ask_with_feedback")
+    workflow = remote.fetch_workflow(name="union_rag.simple_rag.ask_with_feedback")
     execution = remote.execute(workflow, inputs={"question": text})
     execution = remote.sync(execution, sync_nodes=True)
     url = remote.generate_console_url(execution)

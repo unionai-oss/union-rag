@@ -17,7 +17,7 @@ pip install -r requirements.txt
 For quick iteration and development, you can run the workflow on Union with:
 
 ```bash
-unionai run --copy-all --remote union_rag/langchain.py ask --question 'what is flytekit?'
+unionai run --copy-all --remote union_rag/simple_rag.py ask --question 'what is flytekit?'
 ```
 
 ## Workflow Deployment
@@ -25,10 +25,14 @@ unionai run --copy-all --remote union_rag/langchain.py ask --question 'what is f
 Deploy the workflow to Union with the following command:
 
 ```bash
-unionai register union_rag/langchain.py
+unionai register union_rag/simple_rag.py
 ```
 
 ## Slack App Deployment
+
+<details>
+<summary>Deployment instructions</summary>
+<br>
 
 Install [sam cli](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html).
 
@@ -98,3 +102,5 @@ layers for our question-answering slackbot.
 6. Now test your slack app by installing it in your slack workspace and typing
    `@flyte-attendant what is flytekit?`. You should see an initial response
    from the bot, followed by the answer to your question.
+
+</details>

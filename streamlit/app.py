@@ -29,7 +29,7 @@ def get_remote():
 @st.cache_resource
 def get_ask_workflow():
     remote = get_remote()
-    workflow = remote.fetch_workflow(name="union_rag.langchain.ask_with_feedback")
+    workflow = remote.fetch_workflow(name="union_rag.simple_rag.ask_with_feedback")
     return workflow
 
 

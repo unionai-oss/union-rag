@@ -2,7 +2,7 @@ from unionai.remote import UnionRemote
 
 
 remote = UnionRemote()
-task = remote.fetch_task(name="union_rag.langchain.create_search_index")
+task = remote.fetch_task(name="union_rag.simple_rag.create_search_index")
 execution = remote.fetch_execution(name="f59dba4aefe7344e1841")
 execution = remote.sync_execution(execution, sync_nodes=True)
 
