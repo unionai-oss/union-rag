@@ -1,9 +1,11 @@
 beautifulsoup4
 faiss-cpu
+flytekit==1.13.5
 flytekitplugins-deck-standard
 gitpython
 langchain
 langchain-community
+langchain-core
 langchain-huggingface
 langchain-openai
 markdownify
@@ -14,4 +16,4 @@ requests
 sentence_transformers
 tiktoken
 torch==2.0.1
-unionai==0.1.74
+union==0.1.75

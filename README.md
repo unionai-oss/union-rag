@@ -12,20 +12,37 @@ conda create -n union-rag python=3.11 -y
 pip install -r requirements.txt
 ```
 
-## Run the Union RAG Workflow
+## Create the Knowledge Base
+
+First create the knowledge base offline:
+
+```bash
+union run --remote union_rag/simple_rag.py create_knowledge_base \
+   --exclude_patterns '["/api/", "/_tags/"]' \
+   --embedding_type "openai" \
+   --limit 100
+```
+
+## Run the Simple RAG Workflow
 
 For quick iteration and development, you can run the workflow on Union with:
 
 ```bash
-unionai run --copy-all --remote union_rag/simple_rag.py ask --question 'what is flytekit?'
+union run --remote union_rag/simple_rag.py ask --question 'what is flytekit?'
 ```
 
-## Workflow Deployment
+## Simple RAG Workflow Deployment
 
 Deploy the workflow to Union with the following command:
 
 ```bash
-unionai register union_rag/simple_rag.py
+union register union_rag/simple_rag.py
+```
+
+## Run the Agentic RAG Workflow
+
+```bash
+union run --remote union_rag/agentic_rag.py ask --question 'what is flytekit?'
 ```
 
 ## Slack App Deployment

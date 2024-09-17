@@ -38,13 +38,13 @@ To authenticate with Severless run, and go to the link provided to authenticate 
 
 ```{python}
 %cd /content/union-rag
-!unionai create login device-flow
+!union create login device-flow
 ```
 
 To make sure everything is working, run this sample workflow:
 
 ```{python}
-!unionai run --remote _workshop/starter.py main
+!union run --remote _workshop/starter.py main
 ```
 
 Go to the link provided to see your execution on Union!
@@ -65,20 +65,20 @@ provide a limited key for the purposes of this workshop.
 Once you have the key, create a secret on Union with:
 
 ```{python}
-!unionai create secret openai_api_key
+!union create secret openai_api_key
 ```
 
 To see all of your secrets, run:
 
 ```{python}
-!unionai get secret
+!union get secret
 ```
 
 If you are running into an issue with secrets, uncomment the following code to
 delete the secret and try again:
 
 ```{python}
-# !unionai delete secret openai_api_key
+# !union delete secret openai_api_key
 ```
 
 ### Create the knowledge base
@@ -87,7 +87,7 @@ The first stage in building a RAG application is to create knowledge base that
 we represent as a vector store.
 
 ```{python}
-!unionai run --copy-all --remote union_rag/simple_rag.py create_knowledge_base \
+!union run --copy-all --remote union_rag/simple_rag.py create_knowledge_base \
     --exclude_patterns '["/api/", "/_tags/"]' \
     --limit 100
 ```
@@ -127,7 +127,7 @@ We can then use the `VectorStore` knowledge base we created to ask a flyte-relat
 question:
 
 ```{python}
-!unionai run --copy-all --remote union_rag/simple_rag.py ask --question 'what is flytekit?'
+!union run --copy-all --remote union_rag/simple_rag.py ask --question 'what is flytekit?'
 ```
 
 There are a few things to note in this workflow:
@@ -145,7 +145,7 @@ Evaluation is also a big part of the RAG lifecycle. To do this, it's helpful to
 collect feedback. We can use gate nodes to do this:
 
 ```{python}
-!unionai run --copy-all --remote union_rag/simple_rag.py ask_with_feedback --question 'what is flytekit?'
+!union run --copy-all --remote union_rag/simple_rag.py ask_with_feedback --question 'what is flytekit?'
 ```
 
 Go to the execution on the UI and you'll see the `ask_with_feedback` workflow
@@ -160,7 +160,7 @@ RAG workflow through a Streamlit app.
 First, create a Union API key:
 
 ```{python}
-!unionai create app streamlit-rag-app
+!union create app streamlit-rag-app
 ```
 
 Save the API key somewhere secure!
@@ -210,7 +210,7 @@ In this case, we'll use the `all-MiniLM-L6-v2` sentence transformer available
 through Hugging Face.
 
 ```{python}
-!unionai run --copy-all --remote union_rag/simple_rag.py create_knowledge_base \
+!union run --copy-all --remote union_rag/simple_rag.py create_knowledge_base \
     --exclude_patterns '["/api/", "/_tags/"]' \
     --embedding_type "huggingface" \
     --limit 100
@@ -239,7 +239,7 @@ Next, we invoke the `ask_ollama` workflow to run a RAG workflow that uses `phi3`
 to answer our question:
 
 ```{python}
-!unionai run --copy-all --remote union_rag/simple_rag.py ask_ollama --question 'what is flytekit?'
+!union run --copy-all --remote union_rag/simple_rag.py ask_ollama --question 'what is flytekit?'
 ```
 
 Why does this take a lot longer than the GPT RAG workflow?
@@ -265,7 +265,7 @@ through how we can customize the prompts that are using in the langchain pipelin
 that we're using to implement our RAG system.
 
 ```{python}
-!unionai run --copy-all --remote union_rag/simple_rag.py ask_ollama --question 'what is flytekit?' --prompt_template "$(cat PROMPT_TEMPLATE.txt)"
+!union run --copy-all --remote union_rag/simple_rag.py ask_ollama --question 'what is flytekit?' --prompt_template "$(cat PROMPT_TEMPLATE.txt)"
 ```
 
 ## Conclusion

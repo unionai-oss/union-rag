@@ -7,7 +7,6 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 from markdownify import markdownify
-from mashumaro.mixins.json import DataClassJSONMixin
 
 from flytekit.types.file import FlyteFile
 
@@ -73,7 +72,7 @@ class HTML2MarkdownTransformer(BeautifulSoupTransformer):
 
 
 @dataclass
-class CustomDocument(DataClassJSONMixin):
+class CustomDocument:
     page_filepath: FlyteFile
     metadata: dict
 
