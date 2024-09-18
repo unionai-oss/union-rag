@@ -2,9 +2,13 @@
 
 import json
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import Enum
+from typing import Annotated
 
-from flytekit import dynamic, workflow, Secret
+from flytekit import dynamic, task, workflow, wait_for_input, Secret
+from flytekit.deck import DeckField
+from flytekit.deck.renderer import MarkdownRenderer
 from flytekit.types.directory import FlyteDirectory
 from union.actor import ActorEnvironment
 
@@ -14,7 +18,7 @@ from union_rag.utils import openai_env_secret
 
 actor = ActorEnvironment(
     name="agentic-rag",
-    ttl_seconds=360,
+    ttl_seconds=720,
     container_image=image,
     secret_requests=[Secret(key="openai_api_key")],
 )
@@ -96,7 +100,7 @@ def get_vector_store_retriever(path: str):
 
 @actor.task
 @openai_env_secret
-def agent(
+def tool_agent(
     state: AgentState,
     search_index: FlyteDirectory,
 ) -> tuple[AgentState, AgentAction]:
@@ -165,7 +169,7 @@ def retrieve(
 
 @actor.task
 @openai_env_secret
-def grade(state: AgentState) -> GraderAction:
+def grader_agent(state: AgentState) -> GraderAction:
     """Determines whether the retrieved documents are relevant to the question."""
 
     from langchain_core.prompts import PromptTemplate
@@ -314,8 +318,8 @@ def generate(state: AgentState) -> AgentState:
     return state
 
 
-@actor.task
-def return_answer(state: AgentState) -> str:
+@task(container_image=image, enable_deck=True, deck_fields=[DeckField.OUTPUT])
+def return_answer(state: AgentState) -> Annotated[str, MarkdownRenderer()]:
     """Finalize the answer to return a string to the user."""
 
     if len(state.messages) == 1:
@@ -326,7 +330,7 @@ def return_answer(state: AgentState) -> str:
 
 
 @dynamic(container_image=image)
-def agent_loop(
+def tool_agent_router(
     state: AgentState,
     action: AgentAction,
     search_index: FlyteDirectory,
@@ -341,8 +345,8 @@ def agent_loop(
         return state
     elif action == AgentAction.tools:
         state = retrieve(state=state, search_index=search_index)
-        grader_action = grade(state=state)
-        return rewrite_or_generate(
+        grader_action = grader_agent(state=state)
+        return grader_agent_router(
             state=state,
             grader_action=grader_action,
             search_index=search_index,
@@ -353,7 +357,7 @@ def agent_loop(
 
 
 @dynamic(container_image=image)
-def rewrite_or_generate(
+def grader_agent_router(
     state: AgentState,
     grader_action: GraderAction,
     search_index: FlyteDirectory,
@@ -367,9 +371,9 @@ def rewrite_or_generate(
         return generate(state=state)
     elif grader_action == GraderAction.rewrite:
         state = rewrite(state=state)
-        state, action = agent(state=state, search_index=search_index)
+        state, action = tool_agent(state=state, search_index=search_index)
         n_rewrites += 1
-        return agent_loop(
+        return tool_agent_router(
             state=state,
             action=action,
             search_index=search_index,
@@ -394,11 +398,25 @@ def ask(
 ) -> str:
     """An agentic retrieval augmented generation workflow."""
     state = init_state(question=question)
-    state, action = agent(state=state, search_index=search_index)
-    state = agent_loop(
+    state, action = tool_agent(state=state, search_index=search_index)
+    state = tool_agent_router(
         state=state,
         action=action,
         search_index=search_index,
         n_rewrites=0,
     )
     return return_answer(state=state)
+
+
+@workflow
+def ask_with_feedback(
+    question: str,
+    search_index: FlyteDirectory = VectorStore.query(embedding_type="openai"),
+) -> str:
+    answer = ask(
+        question=question,
+        search_index=search_index,
+    )
+    feedback = wait_for_input("get-feedback", timeout=timedelta(hours=1), expected_type=str)
+    answer >> feedback
+    return feedback

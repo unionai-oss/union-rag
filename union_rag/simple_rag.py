@@ -20,6 +20,7 @@ from flytekit import (
 from flytekit.core.artifact import Inputs
 from flytekit.types.directory import FlyteDirectory
 from flytekit.types.file import FlyteFile
+from union.artifacts import DataCard
 
 from union_rag.document import CustomDocument
 from union_rag.utils import openai_env_secret
@@ -131,10 +132,44 @@ def get_documents(
     return documents
 
 
+def generate_data_md(
+    document_chunks,
+    embedding_type: str,
+    n_chunks: int = 5,
+) -> str:
+
+    document_chunks_preview = document_chunks[:n_chunks]
+    document_preview_str = ""
+    for i, doc in enumerate(document_chunks_preview):
+        document_preview_str += f"""\n\n---
+        
+### 📖 Chunk {i}
+        
+**Page metadata:**
+
+{doc.metadata}
+
+**Content:**
+
+```
+{doc.page_content.replace("```", "")}
+```
+"""
+
+    return f"""# 📚 Vector store knowledge base.
+
+This artifact is a vector store of {len(document_chunks)} document chunks using {embedding_type} embeddings.
+
+## Preview
+
+{document_preview_str}
+"""
+
+
 @task(
     container_image=image,
     cache=True,
-    cache_version="7",
+    cache_version="15",
     requests=Resources(cpu="2", mem="8Gi"),
     secret_requests=[Secret(key="openai_api_key")],
     enable_deck=True,
@@ -167,22 +202,27 @@ def create_search_index(
 
         embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
+    document_chunks = [
+        Document(page_content=chunk, metadata=doc.metadata)
+        for doc in documents
+        for chunk in splitter.split_text(doc.page_content)
+    ]
+
     index = FAISS.from_documents(
-        [
-            Document(page_content=chunk, metadata=doc.metadata)
-            for doc in documents
-            for chunk in splitter.split_text(doc.page_content)
-        ],
+        document_chunks,
         embeddings,
     )
     local_path = "./faiss_index"
     index.save_local(local_path)
-    return FlyteDirectory(path=local_path)
+    return VectorStore.create_from(
+        FlyteDirectory(path=local_path),
+        DataCard(generate_data_md(document_chunks, embedding_type)),
+    )
 
 
 @workflow
 def create_knowledge_base(
-    chunk_size: int = 1024,
+    chunk_size: int = 2048,
     root_url_tags_mapping: Optional[dict] = None,
     include_union: bool = False,
     limit: Optional[int] = None,
