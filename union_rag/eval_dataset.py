@@ -4,7 +4,10 @@ import pandas as pd
 from collections import defaultdict
 from itertools import groupby
 
-from flytekit import task, workflow
+from flytekit import task, workflow, ImageSpec
+
+
+image = ImageSpec(packages=["pandas", "pyarrow"])
 
 
 MOCK_DATASET = [
@@ -220,12 +223,12 @@ def rank_annotations_per_question(annotations: list[dict]) -> tuple[list[dict], 
     return [*annotated_reference_answers, *user_reference_answers], raw_rankings
         
 
-@task
+@task(container_image=image)
 def collect_annotations() -> list[dict]:
     return MOCK_DATASET
 
 
-@task
+@task(container_image=image)
 def create_dataset(
     annotations: list[dict],
     min_annotations_per_question: int,
