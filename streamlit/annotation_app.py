@@ -20,6 +20,7 @@ if "current_question_id" not in st.session_state:
     st.session_state.current_question_id = None
 
 
+# TODO: get this dataset from the serverless execution via UnionRemote
 SYNTHETIC_DATASET = [
     {
         "id": 1,
@@ -133,4 +134,5 @@ if submitted:
         st.session_state.current_question_id = random.choice(unanswered)
         st.write(st.session_state.question_ids_answered)
         st.write(st.session_state.current_question_id)
+    # TODO: send feedback back to the serverless execution via UnionRemote
     st.rerun()
