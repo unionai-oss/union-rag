@@ -8,7 +8,7 @@ parser.add_argument("--question", type=str, required=True)
 args = parser.parse_args()
 
 remote = UnionRemote()
-workflow = remote.fetch_workflow(name="union_rag.langchain.ask_with_feedback")
+workflow = remote.fetch_workflow(name="union_rag.simple_rag.ask_with_feedback")
 execution = remote.execute(workflow, inputs={"question": args.question})
 execution = remote.sync(execution, sync_nodes=True)
 url = remote.generate_console_url(execution)
