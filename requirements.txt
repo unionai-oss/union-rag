@@ -11,7 +11,9 @@ langchain-openai
 markdownify
 mashumaro
 openai
+pandas
 playwright
+pyarrow
 requests
 sentence_transformers
 tiktoken

@@ -1,0 +1,22 @@
+- chunk_size: 1024
+  limit: 10
+  prompt_template: |
+    You are a helpful assistant who answers trivia questions.
+    Your responses are as concise as possible.
+
+    QUESTION: {question}
+    =========
+    {summaries}
+    =========
+    FINAL ANSWER:
+- chunk_size: 2048
+  limit: 10
+  prompt_template: |
+    You are a extremely polite assistant who answers trivia questions.
+    Your responses are as concise as possible.
+
+    QUESTION: {question}
+    =========
+    {summaries}
+    =========
+    FINAL ANSWER:

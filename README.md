@@ -18,9 +18,7 @@ First create the knowledge base offline:
 
 ```bash
 union run --remote union_rag/simple_rag.py create_knowledge_base \
-   --exclude_patterns '["/api/", "/_tags/"]' \
-   --embedding_type "openai" \
-   --limit 100
+   --config '{"exclude_patterns": ["/api/", "/_tags/"], "embedding_type": "openai", "limit": 100}'
 ```
 
 ## Run the Simple RAG Workflow

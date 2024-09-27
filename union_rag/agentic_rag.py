@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, Optional
 
 from flytekit import dynamic, task, workflow, wait_for_input, Secret
 from flytekit.deck import DeckField
@@ -395,6 +395,7 @@ def init_state(question: str) -> AgentState:
 def ask(
     question: str,
     search_index: FlyteDirectory = VectorStore.query(embedding_type="openai"),
+    prompt_template: Optional[str] = None,
 ) -> str:
     """An agentic retrieval augmented generation workflow."""
     state = init_state(question=question)
@@ -412,6 +413,7 @@ def ask(
 def ask_with_feedback(
     question: str,
     search_index: FlyteDirectory = VectorStore.query(embedding_type="openai"),
+    prompt_template: Optional[str] = None,
 ) -> str:
     answer = ask(
         question=question,

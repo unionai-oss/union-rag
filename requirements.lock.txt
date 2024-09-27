@@ -360,6 +360,7 @@ numpy==1.26.4
     #   pandas
     #   patsy
     #   phik
+    #   pyarrow
     #   pywavelets
     #   scikit-learn
     #   scipy
@@ -391,6 +392,7 @@ packaging==23.2
     #   transformers
 pandas==2.2.2
     # via
+    #   -r requirements.txt
     #   flytekitplugins-deck-standard
     #   phik
     #   seaborn
@@ -434,6 +436,8 @@ ptyprocess==0.7.0
     # via pexpect
 pure-eval==0.2.2
     # via stack-data
+pyarrow==17.0.0
+    # via -r requirements.txt
 pyasn1==0.6.0
     # via
     #   pyasn1-modules
