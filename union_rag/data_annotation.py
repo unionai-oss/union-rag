@@ -5,7 +5,15 @@ import os
 from dataclasses import dataclass
 from typing import List, Annotated
 
-from flytekit import task, workflow, Resources, Artifact, Secret, map_task, current_context
+from flytekit import (
+    task,
+    workflow,
+    Resources,
+    Artifact,
+    Secret,
+    map_task,
+    current_context,
+)
 from flytekit.types.file import FlyteFile
 
 from union_rag.document import CustomDocument
@@ -16,12 +24,12 @@ DEFAULT_ANNOTATION_SET_NAME = "default"
 QuestionAndAnswerDataset = Artifact(name="question_and_answer_dataset")
 AnnotatedDataset = Artifact(name="annotated_dataset", partition_keys=["name"])
 
+
 @dataclass
 class QuestionAndAnswers:
     question: str
     answers: List[str]
     url: str
-
 
 
 @task(
@@ -31,7 +39,9 @@ class QuestionAndAnswers:
     cache=True,
     cache_version="v10",
 )
-def generate_qa_pairs(flyte_doc: CustomDocument, n_questions: int, n_answers: int) -> List[QuestionAndAnswers]:
+def generate_qa_pairs(
+    flyte_doc: CustomDocument, n_questions: int, n_answers: int
+) -> List[QuestionAndAnswers]:
     from langchain_openai import ChatOpenAI
     from langchain.prompts import PromptTemplate
     from langchain.chains import LLMChain
@@ -57,7 +67,7 @@ def generate_qa_pairs(flyte_doc: CustomDocument, n_questions: int, n_answers: in
         5. The question should relate to the overarching theme or concepts in the context but not be directly answerable by it. Think of the question as a follow-up from an attentive student seeking to explore the topic further or clarify a complex point.
         6. IMPORTANT: Place each question on a new line, with no numbering or prefixes.
 
-        Questions:"""
+        Questions:""",
     )
 
     answer_prompt = PromptTemplate(
@@ -75,26 +85,36 @@ def generate_qa_pairs(flyte_doc: CustomDocument, n_questions: int, n_answers: in
         4. If the answer is not directly in the context, use reasonable inferences or analysis to provide possible answers.
         5. IMPORTANT: Place each answer on a new line, with no numbering or prefixes.
 
-        Answers:"""
+        Answers:""",
     )
 
     question_chain = LLMChain(llm=llm, prompt=question_prompt)
     answer_chain = LLMChain(llm=llm, prompt=answer_prompt)
 
     # Generate multiple questions
-    questions_text = question_chain.run(context=document.page_content, n_questions=n_questions)
-    questions = [q.strip() for q in questions_text.strip().split('\n') if q.strip()]
+    questions_text = question_chain.run(
+        context=document.page_content, n_questions=n_questions
+    )
+    questions = [q.strip() for q in questions_text.strip().split("\n") if q.strip()]
 
     qa_pairs = []
     for question in questions:
         # Generate multiple answers for each question
-        answers_text = answer_chain.run(context=document.page_content, question=question, n_answers=n_answers)
-        answers = [ans.strip() for ans in answers_text.strip().split('\n') if ans.strip()]
+        answers_text = answer_chain.run(
+            context=document.page_content, question=question, n_answers=n_answers
+        )
+        answers = [
+            ans.strip() for ans in answers_text.strip().split("\n") if ans.strip()
+        ]
         print("question:")
         print(question)
         print("answers:")
         print(answers)
-        qa_pairs.append(QuestionAndAnswers(question=question, answers=answers, url=flyte_doc.metadata['source']))
+        qa_pairs.append(
+            QuestionAndAnswers(
+                question=question, answers=answers, url=flyte_doc.metadata["source"]
+            )
+        )
 
     return qa_pairs
 
@@ -106,7 +126,9 @@ def generate_qa_pairs(flyte_doc: CustomDocument, n_questions: int, n_answers: in
     cache_version="v2",
 )
 def create_dataset(questions_and_answers: List[List[QuestionAndAnswers]]) -> FlyteFile:
-    questions_and_answers_flat = [qa for qa_sublist in questions_and_answers for qa in qa_sublist]
+    questions_and_answers_flat = [
+        qa for qa_sublist in questions_and_answers for qa in qa_sublist
+    ]
     qa_triples_list = []
     id_counter = 1
     for i, qa in enumerate(questions_and_answers_flat):
@@ -124,17 +146,22 @@ def create_dataset(questions_and_answers: List[List[QuestionAndAnswers]]) -> Fly
             )
             id_counter += 1
 
-    file_path = 'qa_triples_list.json'
-    with open(file_path, 'w') as f:
+    file_path = "qa_triples_list.json"
+    with open(file_path, "w") as f:
         json.dump(qa_triples_list, f, indent=4)
 
     return FlyteFile(path=file_path)
 
 
 @workflow
-def data_synthesis_workflow(documents: List[CustomDocument] = KnowledgeBase.query(), n_questions: int = 1,
-                            n_answers: int = 5) -> Annotated[FlyteFile, QuestionAndAnswerDataset]:
-    partial_task = functools.partial(generate_qa_pairs, n_questions=n_questions, n_answers=n_answers)
+def data_synthesis_workflow(
+    documents: List[CustomDocument] = KnowledgeBase.query(),
+    n_questions: int = 1,
+    n_answers: int = 5,
+) -> Annotated[FlyteFile, QuestionAndAnswerDataset]:
+    partial_task = functools.partial(
+        generate_qa_pairs, n_questions=n_questions, n_answers=n_answers
+    )
     questions_and_answers = map_task(partial_task)(flyte_doc=documents)
     dataset = create_dataset(questions_and_answers=questions_and_answers)
     return dataset

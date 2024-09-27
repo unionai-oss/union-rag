@@ -61,6 +61,7 @@ FINAL ANSWER:
 # Create knowledge base
 # ---------------------
 
+
 @dataclass
 class RAGConfig(DataClassJSONMixin):
     prompt_template: str = ""
@@ -94,9 +95,11 @@ def get_documents(
             "https://docs.flyte.org/en/latest/": ("article", {"role": "main"}),
         }
     if include_union:
-        root_url_tags_mapping.update({
-            "https://docs.union.ai/": ("article", {"class": "bd-article"}),
-        })
+        root_url_tags_mapping.update(
+            {
+                "https://docs.union.ai/": ("article", {"class": "bd-article"}),
+            }
+        )
 
     page_transformer = HTML2MarkdownTransformer(root_url_tags_mapping)
     urls = list(
@@ -148,14 +151,13 @@ def generate_data_md(
     embedding_type: str,
     n_chunks: int = 5,
 ) -> str:
-
     document_chunks_preview = document_chunks[:n_chunks]
     document_preview_str = ""
     for i, doc in enumerate(document_chunks_preview):
         document_preview_str += f"""\n\n---
-        
+
 ### 📖 Chunk {i}
-        
+
 **Page metadata:**
 
 {doc.metadata}
@@ -232,9 +234,7 @@ def create_search_index(
 
 
 @workflow
-def create_knowledge_base(
-    config: RAGConfig
-) -> FlyteDirectory:
+def create_knowledge_base(config: RAGConfig) -> FlyteDirectory:
     """
     Workflow for creating the vector store knowledge base.
     """
@@ -253,6 +253,7 @@ def create_knowledge_base(
 # ------------
 # GPT workflow
 # ------------
+
 
 @task(
     container_image=image,
@@ -316,6 +317,8 @@ def ask_with_feedback(
         search_index=search_index,
         prompt_template=prompt_template,
     )
-    feedback = wait_for_input("get-feedback", timeout=timedelta(hours=1), expected_type=str)
+    feedback = wait_for_input(
+        "get-feedback", timeout=timedelta(hours=1), expected_type=str
+    )
     answer >> feedback
     return feedback

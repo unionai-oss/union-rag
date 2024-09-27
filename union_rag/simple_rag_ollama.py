@@ -18,14 +18,12 @@ from union_rag.simple_rag import image, VectorStore, DEFAULT_PROMPT_TEMPLATE
 
 OLLAMA_MODEL_NAME = "llama3"
 
-image_ollama = (
-    image
-    .with_apt_packages(["lsof"])
-    .with_commands([
+image_ollama = image.with_apt_packages(["lsof"]).with_commands(
+    [
         "wget https://ollama.com/install.sh",
         "sh ./install.sh",
         f"sh ./ollama_serve.sh {OLLAMA_MODEL_NAME} /root/.ollama/models",
-    ])
+    ]
 )
 image_ollama.source_root = "."
 
@@ -43,6 +41,7 @@ def ollama_server(fn):
         finally:
             print("Terminating Ollama server")
             server.terminate()
+
     return wrapper
 
 
@@ -57,7 +56,7 @@ def answer_question_ollama(
     question: str,
     search_index: FlyteDirectory = VectorStore.query(embedding_type="huggingface"),
     prompt_template: Optional[str] = None,
-) -> str:   
+) -> str:
     from langchain.chains.qa_with_sources import load_qa_with_sources_chain
     from langchain_community.chat_models import ChatOllama
     from langchain_community.vectorstores import FAISS

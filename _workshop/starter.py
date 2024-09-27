@@ -1,4 +1,5 @@
 """Simple workflow to make sure the connection to remote works."""
+
 from flytekit import task, workflow
 
 

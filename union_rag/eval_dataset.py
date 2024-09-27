@@ -129,12 +129,14 @@ def create_comparison_data(annotations: list[dict]) -> tuple[list[dict], list[di
     user_reference_answers = []
     for annotation in annotations:
         if annotation["user_answer"] is not None:
-            user_reference_answers.append({
-                "id": annotation["id"],
-                "question": annotation["question"],
-                "reference_answer": annotation["user_answer"],
-                "is_user_generated": True,
-            })
+            user_reference_answers.append(
+                {
+                    "id": annotation["id"],
+                    "question": annotation["question"],
+                    "reference_answer": annotation["user_answer"],
+                    "is_user_generated": True,
+                }
+            )
             continue
         comparisons.append(annotation)
     return comparisons, user_reference_answers
@@ -148,7 +150,9 @@ def calculate_expected_score(rating_a: float, rating_b: float) -> float:
     return expected_score_a
 
 
-def update_ratings(rating_a: float, rating_b: float, score_a: float, K: int = 32) -> tuple[float, float]:
+def update_ratings(
+    rating_a: float, rating_b: float, score_a: float, K: int = 32
+) -> tuple[float, float]:
     """
     Update ratings for item A and item B after a comparison.
     """
@@ -161,10 +165,12 @@ def update_ratings(rating_a: float, rating_b: float, score_a: float, K: int = 32
     return new_rating_a, new_rating_b
 
 
-def calculate_elo_rankings(comparisons: list[dict], K: int = 32) -> tuple[defaultdict, dict]:
+def calculate_elo_rankings(
+    comparisons: list[dict], K: int = 32
+) -> tuple[defaultdict, dict]:
     """
     Calculate the ELO rankings for the comparisons.
-    
+
     K-factor, can be adjusted based on the volatility desired
     """
     ratings = defaultdict(float)
@@ -195,7 +201,9 @@ def calculate_elo_rankings(comparisons: list[dict], K: int = 32) -> tuple[defaul
     return ratings, answer_to_question
 
 
-def rank_annotations_per_question(annotations: list[dict]) -> tuple[list[dict], list[dict]]:
+def rank_annotations_per_question(
+    annotations: list[dict],
+) -> tuple[list[dict], list[dict]]:
     comparisons, user_reference_answers = create_comparison_data(annotations)
     rankings, answer_to_question_id = calculate_elo_rankings(comparisons)
 
@@ -206,25 +214,29 @@ def rank_annotations_per_question(annotations: list[dict]) -> tuple[list[dict], 
     # collect raw rankings
     for answer, rating in sorted_rankings:
         question_id, question = answer_to_question_id[answer]
-        raw_rankings.append({
-            "id": question_id,
-            "question": question,
-            "answer": answer,
-            "elo_rating": rating,
-        })
+        raw_rankings.append(
+            {
+                "id": question_id,
+                "question": question,
+                "answer": answer,
+                "elo_rating": rating,
+            }
+        )
 
     # collect best answer for this question
     best_answer = sorted_rankings[0][0]
     question_id, question = answer_to_question_id[best_answer]
-    annotated_reference_answers.append({
-        "id": question_id,
-        "question": question,
-        "reference_answer": best_answer,
-        "is_user_generated": True,
-    })
+    annotated_reference_answers.append(
+        {
+            "id": question_id,
+            "question": question,
+            "reference_answer": best_answer,
+            "is_user_generated": True,
+        }
+    )
 
     return [*annotated_reference_answers, *user_reference_answers], raw_rankings
-        
+
 
 @task(container_image=image)
 def collect_annotations() -> list[dict]:
@@ -240,13 +252,19 @@ def create_dataset(
 
     all_reference_answers = []
     all_raw_rankings = []
-    
-    for _, annotations_by_question in groupby(sorted_annotations, key=lambda x: x["id"]):
+
+    for _, annotations_by_question in groupby(
+        sorted_annotations, key=lambda x: x["id"]
+    ):
         annotations_by_question = list(annotations_by_question)
         if len(annotations_by_question) <= min_annotations_per_question:
-            print(f"Skipping question {annotations_by_question[0]['id']} because it has less than 10 annotations")
+            print(
+                f"Skipping question {annotations_by_question[0]['id']} because it has less than 10 annotations"
+            )
             continue
-        reference_answers, raw_rankings = rank_annotations_per_question(annotations_by_question)
+        reference_answers, raw_rankings = rank_annotations_per_question(
+            annotations_by_question
+        )
         all_reference_answers.extend(reference_answers)
         all_raw_rankings.extend(raw_rankings)
 

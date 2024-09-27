@@ -16,18 +16,16 @@ app = App(process_before_response=True)
 def to_slack_mrkdown(text: str):
     regex_patterns = (
         # replace hyphenated lists with bullet points
-        (re.compile('^- ', flags=re.M), '• '),
-        (re.compile('^  - ', flags=re.M), '  ◦ '),
-        (re.compile('^    - ', flags=re.M), '    ⬩ '), # ◆
-        (re.compile('^      - ', flags=re.M), '    ◽ '),
-
+        (re.compile("^- ", flags=re.M), "• "),
+        (re.compile("^  - ", flags=re.M), "  ◦ "),
+        (re.compile("^    - ", flags=re.M), "    ⬩ "),  # ◆
+        (re.compile("^      - ", flags=re.M), "    ◽ "),
         # replace headers with bold
-        (re.compile('^#+ (.+)$', flags=re.M), r'*\1*'),
-        (re.compile('\*\*'), '*'),
-        (re.compile('\*\*'), '*'),
-
+        (re.compile("^#+ (.+)$", flags=re.M), r"*\1*"),
+        (re.compile("\*\*"), "*"),
+        (re.compile("\*\*"), "*"),
         # remove code block language
-        (re.compile("```[a-z]+"), "```")
+        (re.compile("```[a-z]+"), "```"),
     )
     for regex, replacement in regex_patterns:
         text = regex.sub(replacement, text)
@@ -40,9 +38,9 @@ def ack_answer_question(body, ack, say):
     event = body["event"]
     thread_ts = event.get("thread_ts", None) or event["ts"]
     if event.get("text") is None:
-        say(f"Please ask a question.", thread_ts=thread_ts)
+        say("Please ask a question.", thread_ts=thread_ts)
     else:
-        say(f"Processing your question, one moment...", thread_ts=thread_ts)
+        say("Processing your question, one moment...", thread_ts=thread_ts)
 
 
 def ack_get_feedback(ack):
@@ -64,7 +62,10 @@ def answer_question(body, say):
 
     answer = None
     for _ in range(N_RETRIES):
-        if "n0" in execution.node_executions and execution.node_executions["n0"].is_done:
+        if (
+            "n0" in execution.node_executions
+            and execution.node_executions["n0"].is_done
+        ):
             answer = execution.node_executions["n0"].outputs["o0"]
             break
         execution = remote.sync(execution, sync_nodes=True)
@@ -98,26 +99,18 @@ def answer_question(body, say):
                 "elements": [
                     {
                         "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "emoji": True,
-                            "text": "👍"
-                        },
+                        "text": {"type": "plain_text", "emoji": True, "text": "👍"},
                         "value": f"thumbs_up:{execution.id.name}",
                         "action_id": "feedback_thumbs_up",
                     },
                     {
                         "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "emoji": True,
-                            "text": "👎"
-                        },
+                        "text": {"type": "plain_text", "emoji": True, "text": "👎"},
                         "value": f"thumbs_down:{execution.id.name}",
                         "action_id": "feedback_thumbs_down",
-                    }
-                ]
-            }
+                    },
+                ],
+            },
         ],
         thread_ts=thread_ts,
         unfurl_links=False,
@@ -162,7 +155,7 @@ def get_feedback(body, respond, ack):
     )
 
 
-app.event("app_mention")(   
+app.event("app_mention")(
     ack=ack_answer_question,
     lazy=[answer_question],
 )

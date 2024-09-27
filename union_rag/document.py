@@ -17,7 +17,6 @@ REQUEST_TIMEOUT = 10.0
 
 
 class HTML2MarkdownTransformer(BeautifulSoupTransformer):
-
     def __init__(self, root_url_tags_mapping: dict[str, tuple[str, dict]] = None):
         self.root_url_tags_mapping = root_url_tags_mapping
 
@@ -40,13 +39,13 @@ class HTML2MarkdownTransformer(BeautifulSoupTransformer):
                 cleaned_content = self.remove_unnecessary_lines(cleaned_content)
             doc.page_content = cleaned_content
             yield doc
-    
+
     def get_root_tag(self, source: str):
         for url, tag in self.root_url_tags_mapping.items():
             if source.startswith(url):
                 return tag
         raise ValueError(f"Unknown source: {source}")
-            
+
     @staticmethod
     def remove_unwanted_tags(html_content: str, unwanted_tags: List[str]) -> str:
         soup = BeautifulSoup(html_content, "html.parser")
@@ -80,7 +79,7 @@ class CustomDocument:
         with open(self.page_filepath) as f:
             page_content = f.read()
         return Document(page_content=page_content, metadata=self.metadata)
-    
+
 
 def get_all_links(
     url,
@@ -103,14 +102,16 @@ def get_all_links(
 
     try:
         response = requests.get(url, timeout=REQUEST_TIMEOUT)
-        soup = BeautifulSoup(response.text, 'html.parser')
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        for link in soup.find_all('a', href=True):
-            full_link = urljoin(url, link['href'])
+        for link in soup.find_all("a", href=True):
+            full_link = urljoin(url, link["href"])
             full_link = full_link.split("#")[0]
             full_link = full_link.split("?")[0]
             if full_link.startswith(base_domain):
-                visited = get_all_links(full_link, base_domain, visited, limit, exclude_patterns)
+                visited = get_all_links(
+                    full_link, base_domain, visited, limit, exclude_patterns
+                )
     except requests.exceptions.RequestException as e:
         print(f"Failed to access {url}: {str(e)}")
     return visited
@@ -136,4 +137,6 @@ def get_links(
 
 
 if __name__ == "__main__":
-    get_links("https://docs.flyte.org/en/latest/", exclude_patterns=["/api/", "/_tags/"])
+    get_links(
+        "https://docs.flyte.org/en/latest/", exclude_patterns=["/api/", "/_tags/"]
+    )

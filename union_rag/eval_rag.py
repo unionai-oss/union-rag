@@ -3,7 +3,6 @@
 import os
 from dataclasses import dataclass, asdict
 from typing import Annotated, Optional
-from functools import partial
 
 import pandas as pd
 from flytekit import current_context, dynamic, task, workflow, Artifact, Deck, Secret
@@ -44,8 +43,9 @@ class Answer:
 )
 def prepare_questions(dataset: pd.DataFrame, n_answers: int) -> list[Question]:
     questions = (
-        dataset.loc[dataset.index.repeat(n_answers)]
-        [["id", "question", "reference_answer", "is_user_generated"]]
+        dataset.loc[dataset.index.repeat(n_answers)][
+            ["id", "question", "reference_answer", "is_user_generated"]
+        ]
         .astype({"id": int})
         .to_dict(orient="records")
     )
@@ -79,13 +79,15 @@ def batch_rag_pipeline(
     questions: list[Question],
     config: RAGConfig,
 ) -> list[Answer]:
-    search_index = create_knowledge_base(config) 
+    search_index = create_knowledge_base(config)
     answers = answer_questions(questions, search_index, config.prompt_template)
     return answers
 
 
 @dynamic(container_image=image, cache=True, cache_version="1")
-def run_evaluation(questions: list[Question], eval_configs: list[RAGConfig]) -> list[list[Answer]]:
+def run_evaluation(
+    questions: list[Question], eval_configs: list[RAGConfig]
+) -> list[list[Answer]]:
     answers = []
     for config in eval_configs:
         answers.append(batch_rag_pipeline(questions, config))
@@ -108,14 +110,16 @@ def combine_answers(
     for _answers, config in zip(answers, eval_configs):
         for answer, question in zip(_answers, questions):
             assert answer.question_id == question.id
-            combined_answers.append({
-                "question_id": question.id,
-                "question": question.question,
-                "answer": answer.answer,
-                "reference_answer": question.reference_answer,
-                "is_user_generated": question.is_user_generated,
-                **asdict(config),
-            })
+            combined_answers.append(
+                {
+                    "question_id": question.id,
+                    "question": question.question,
+                    "answer": answer.answer,
+                    "reference_answer": question.reference_answer,
+                    "is_user_generated": question.is_user_generated,
+                    **asdict(config),
+                }
+            )
 
     return pd.DataFrame(combined_answers)
 
@@ -127,7 +131,9 @@ def traditional_nlp_eval(answers_dataset: pd.DataFrame) -> pd.DataFrame:
     bleu_scores, rouge1_scores = [], []
     rouge_scorer = rouge_scorer.RougeScorer(["rouge1"])
     for row in answers_dataset.itertuples():
-        bleu_scores.append(sentence_bleu([row.reference_answer.split()], row.answer.split()))
+        bleu_scores.append(
+            sentence_bleu([row.reference_answer.split()], row.answer.split())
+        )
         _rouge_scores = rouge_scorer.score(row.reference_answer, row.answer)
         rouge1_scores.append(_rouge_scores["rouge1"].fmeasure)
 
@@ -159,24 +165,27 @@ in terms of correctness? You MUST answer "Yes" or "No".
 
 
 def llm_correctness_eval(
-    answers_dataset: pd.DataFrame,
-    eval_prompt_template: Optional[str] = None
+    answers_dataset: pd.DataFrame, eval_prompt_template: Optional[str] = None
 ) -> pd.DataFrame:
     from langchain_core.prompts import PromptTemplate
     from langchain_openai import ChatOpenAI
 
     model = ChatOpenAI(model_name="gpt-4-turbo", temperature=0.9)
-    prompt = PromptTemplate.from_template(eval_prompt_template or DEFAULT_EVAL_PROMPT_TEMPLATE)
+    prompt = PromptTemplate.from_template(
+        eval_prompt_template or DEFAULT_EVAL_PROMPT_TEMPLATE
+    )
 
     llm_correctness_scores = []
 
     for _, row in answers_dataset.iterrows():
         chain = prompt | model
-        result = chain.invoke({
-            "question": row["question"],
-            "reference_answer": row["reference_answer"],
-            "candidate_answer": row["answer"]
-        })
+        result = chain.invoke(
+            {
+                "question": row["question"],
+                "reference_answer": row["reference_answer"],
+                "candidate_answer": row["answer"],
+            }
+        )
 
         result = result.content.lower().strip().strip(".").strip("'").strip('"')
         if result not in ["yes", "no"]:
@@ -205,13 +214,18 @@ def evaluate_answers(
     evaluation = llm_correctness_eval(evaluation, eval_prompt_template)
 
     evaluation_summary = (
-        evaluation
-        .groupby([*RAGConfig.__dataclass_fields__])
-        [["bleu_score", "rouge1_f1", "llm_correctness_score"]].mean()
+        evaluation.groupby([*RAGConfig.__dataclass_fields__])[
+            ["bleu_score", "rouge1_f1", "llm_correctness_score"]
+        ]
+        .mean()
         .reset_index()
     )
-    current_context().decks.insert(0, Deck("Evaluation", TopFrameRenderer(10).to_html(evaluation)))
-    current_context().decks.insert(0, Deck("Evaluation Summary", TopFrameRenderer(10).to_html(evaluation_summary)))
+    current_context().decks.insert(
+        0, Deck("Evaluation", TopFrameRenderer(10).to_html(evaluation))
+    )
+    current_context().decks.insert(
+        0, Deck("Evaluation Summary", TopFrameRenderer(10).to_html(evaluation_summary))
+    )
 
     return evaluation, evaluation_summary
 
@@ -219,7 +233,9 @@ def evaluate_answers(
 @workflow
 def evaluate_simple_rag(
     eval_configs: list[RAGConfig],
-    eval_dataset: Annotated[pd.DataFrame, EvalDatasetArtifact] = EvalDatasetArtifact.query(),
+    eval_dataset: Annotated[
+        pd.DataFrame, EvalDatasetArtifact
+    ] = EvalDatasetArtifact.query(),
     eval_prompt_template: Optional[str] = None,
     n_answers: int = 5,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:

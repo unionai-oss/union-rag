@@ -20,6 +20,7 @@ if "feedback" not in st.session_state:
 # Utility functions
 # -----------------
 
+
 @st.cache_resource
 def get_remote():
     remote = UnionRemote()
@@ -41,7 +42,7 @@ def provide_feedback(execution_id, feedback):
     remote = get_remote()
     execution = remote.fetch_execution(name=execution_id)
     execution = remote.sync(execution)
-    
+
     st.session_state.feedback[execution_id] = feedback
     remote.set_signal("get-feedback", execution_id, feedback)
 
@@ -58,7 +59,10 @@ def ask(question: str):
     for _ in range(n_retries):
         # gets the answer from the first node, which is the "ask" workflow.
         # the second part of the workflow is the feedback loop.
-        if "n0" in execution.node_executions and execution.node_executions["n0"].is_done:
+        if (
+            "n0" in execution.node_executions
+            and execution.node_executions["n0"].is_done
+        ):
             answer = execution.node_executions["n0"].outputs["o0"]
             break
         execution = remote.sync(execution, sync_nodes=True)
@@ -66,8 +70,9 @@ def ask(question: str):
 
     if answer is None:
         raise RuntimeError("Failed to get answer")
-    
+
     return answer, execution.id.name
+
 
 # --------
 # Main App
@@ -114,7 +119,7 @@ if prompt := st.chat_input("How does Flyte work?"):
         st.markdown(prompt)
 
     # Display assistant response in chat message container
-    with st.spinner('🤖 Union RAG is thinking...'):
+    with st.spinner("🤖 Union RAG is thinking..."):
         output, execution_id = ask(prompt)
 
     with st.chat_message("assistant"):

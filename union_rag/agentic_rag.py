@@ -53,9 +53,7 @@ class Message:
             "ai": AIMessage,
             "tool": ToolMessage,
             "human": HumanMessage,
-        }[
-            message_type
-        ](**data)
+        }[message_type](**data)
 
     @classmethod
     def from_langchain(cls, message):
@@ -77,7 +75,7 @@ class AgentState:
     def __getitem__(self, index):
         message: Message = self.messages[index]
         return message.to_langchain()
-    
+
 
 def get_vector_store_retriever(path: str):
     from langchain_community.vectorstores import FAISS
@@ -188,8 +186,8 @@ def grader_agent(state: AgentState) -> GraderAction:
 
     # Prompt
     prompt = PromptTemplate(
-        template="""You are a grader assessing relevance of a retrieved 
-        document to a user question. \n 
+        template="""You are a grader assessing relevance of a retrieved
+        document to a user question. \n
         Here is the retrieved document: \n\n {context} \n\n
         Here is the user question: {question} \n
         If the document contains keyword(s) or semantic meaning related to the
@@ -250,7 +248,7 @@ def rewrite(state: AgentState) -> AgentState:
     intent / meaning. \n
     Here is the initial question:
     \n ------- \n
-    {question} 
+    {question}
     \n ------- \n
     Formulate an improved question and provide your reasoning.
     """
@@ -419,6 +417,8 @@ def ask_with_feedback(
         question=question,
         search_index=search_index,
     )
-    feedback = wait_for_input("get-feedback", timeout=timedelta(hours=1), expected_type=str)
+    feedback = wait_for_input(
+        "get-feedback", timeout=timedelta(hours=1), expected_type=str
+    )
     answer >> feedback
     return feedback

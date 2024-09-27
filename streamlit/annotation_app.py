@@ -28,7 +28,7 @@ SYNTHETIC_DATASET = [
         "answers": [
             "London",
             "Paris",
-        ]
+        ],
     },
     {
         "id": 2,
@@ -36,7 +36,7 @@ SYNTHETIC_DATASET = [
         "answers": [
             "Egypt",
             "Russia",
-        ]
+        ],
     },
     {
         "id": 3,
@@ -44,13 +44,14 @@ SYNTHETIC_DATASET = [
         "answers": [
             "J.R.R. Tolkien",
             "C.S. Lewis",
-        ]
+        ],
     },
 ]
 
 question_ids = [q["id"] for q in SYNTHETIC_DATASET]
 question_ids_unanswered = [
-    q["id"] for q in SYNTHETIC_DATASET
+    q["id"]
+    for q in SYNTHETIC_DATASET
     if q["id"] not in st.session_state.question_ids_answered
 ]
 if question_ids_unanswered == []:
@@ -61,7 +62,9 @@ if question_ids_unanswered == []:
 if st.session_state.current_question_id is None:
     st.session_state.current_question_id = random.choice(question_ids_unanswered)
 
-data_point = [q for q in SYNTHETIC_DATASET if q["id"] == st.session_state.current_question_id]
+data_point = [
+    q for q in SYNTHETIC_DATASET if q["id"] == st.session_state.current_question_id
+]
 assert len(data_point) == 1
 data_point = data_point[0]
 
@@ -70,6 +73,7 @@ ANSWER_FORMAT = {
     "answer_2": "Answer 2",
     "neither": "Neither are correct",
 }
+
 
 @st.cache_data
 def format_func(answer: str) -> str:
@@ -129,7 +133,9 @@ if submitted:
     st.write("Thank you for your submission!")
     st.session_state.question_ids_answered.append(data_point["id"])
     st.write(f"Submission: {label, correct_answer_text}")
-    unanswered = [q for q in question_ids if q not in st.session_state.question_ids_answered]
+    unanswered = [
+        q for q in question_ids if q not in st.session_state.question_ids_answered
+    ]
     if len(unanswered) > 0:
         st.session_state.current_question_id = random.choice(unanswered)
         st.write(st.session_state.question_ids_answered)
