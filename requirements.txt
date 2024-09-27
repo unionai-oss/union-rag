@@ -15,5 +15,5 @@ playwright
 requests
 sentence_transformers
 tiktoken
-torch==2.0.1
+torch==2.4.1
 union==0.1.75

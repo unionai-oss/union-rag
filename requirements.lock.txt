@@ -592,7 +592,7 @@ tokenizers==0.19.1
     # via
     #   langchain-huggingface
     #   transformers
-torch==2.0.1
+torch==2.4.1
     # via
     #   -r requirements.txt
     #   sentence-transformers
@@ -664,3 +664,5 @@ ydata-profiling==4.8.3
     # via flytekitplugins-deck-standard
 zipp==3.19.2
     # via importlib-metadata
+flytekitplugins-flyteinteractive==1.13.5
+pyarrow==17.0.0
