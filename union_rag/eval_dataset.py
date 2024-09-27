@@ -3,11 +3,14 @@
 import pandas as pd
 from collections import defaultdict
 from itertools import groupby
+from typing import Annotated
 
-from flytekit import task, workflow, ImageSpec
+from flytekit import task, workflow, Artifact, ImageSpec
 
 
 image = ImageSpec(packages=["pandas", "pyarrow"])
+
+EvalDatasetArtifact = Artifact(name="test-eval-dataset")
 
 
 MOCK_DATASET = [
@@ -232,7 +235,7 @@ def collect_annotations() -> list[dict]:
 def create_dataset(
     annotations: list[dict],
     min_annotations_per_question: int,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[Annotated[pd.DataFrame, EvalDatasetArtifact], pd.DataFrame]:
     sorted_annotations = sorted(annotations, key=lambda x: x["id"])
 
     all_reference_answers = []
@@ -251,6 +254,7 @@ def create_dataset(
 
 
 @workflow
-def create_eval_dataset(min_annotations_per_question: int = 3) -> tuple[pd.DataFrame, pd.DataFrame]:
+def create_eval_dataset(min_annotations_per_question: int = 3) -> pd.DataFrame:
     annotations = collect_annotations()
-    return create_dataset(annotations, min_annotations_per_question)
+    out, _ = create_dataset(annotations, min_annotations_per_question)
+    return out

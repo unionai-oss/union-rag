@@ -3,6 +3,7 @@
 import asyncio
 import itertools
 import os
+from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from typing import Annotated, Optional
@@ -20,6 +21,7 @@ from flytekit import (
 from flytekit.core.artifact import Inputs
 from flytekit.types.directory import FlyteDirectory
 from flytekit.types.file import FlyteFile
+from mashumaro.mixins.json import DataClassJSONMixin
 from union.artifacts import DataCard
 
 from union_rag.document import CustomDocument
@@ -59,6 +61,15 @@ FINAL ANSWER:
 # Create knowledge base
 # ---------------------
 
+@dataclass
+class RAGConfig(DataClassJSONMixin):
+    prompt_template: str = ""
+    chunk_size: int = 2048
+    include_union: bool = False
+    limit: Optional[int | float] = None
+    embedding_type: str = "openai"
+
+
 @task(
     container_image=image,
     cache=True,
@@ -69,7 +80,7 @@ FINAL ANSWER:
 def get_documents(
     root_url_tags_mapping: Optional[dict] = None,
     include_union: bool = False,
-    limit: Optional[int] = None,
+    limit: Optional[int | float] = None,
     exclude_patterns: Optional[list[str]] = None,
 ) -> Annotated[list[CustomDocument], KnowledgeBase]:
     """
@@ -177,7 +188,7 @@ This artifact is a vector store of {len(document_chunks)} document chunks using 
 @openai_env_secret
 def create_search_index(
     documents: list[CustomDocument] = KnowledgeBase.query(),
-    chunk_size: int | None = None,
+    chunk_size: int | float | None = None,
     embedding_type: str = "openai",
 ) -> Annotated[FlyteDirectory, VectorStore(embedding_type=Inputs.embedding_type)]:
     """
@@ -190,7 +201,7 @@ def create_search_index(
     chunk_size = chunk_size or 1024
     documents = [flyte_doc.to_document() for flyte_doc in documents]
     splitter = CharacterTextSplitter(
-        separator=" ", chunk_size=chunk_size, chunk_overlap=0
+        separator=" ", chunk_size=int(chunk_size), chunk_overlap=0
     )
 
     if embedding_type == "openai":
@@ -222,26 +233,19 @@ def create_search_index(
 
 @workflow
 def create_knowledge_base(
-    chunk_size: int = 2048,
-    root_url_tags_mapping: Optional[dict] = None,
-    include_union: bool = False,
-    limit: Optional[int] = None,
-    exclude_patterns: Optional[list[str]] = None,
-    embedding_type: str = "openai",
+    config: RAGConfig
 ) -> FlyteDirectory:
     """
     Workflow for creating the vector store knowledge base.
     """
     docs = get_documents(
-        root_url_tags_mapping=root_url_tags_mapping,
-        include_union=include_union,
-        limit=limit,
-        exclude_patterns=exclude_patterns,
+        include_union=config.include_union,
+        limit=config.limit,
     )
     search_index = create_search_index(
         documents=docs,
-        chunk_size=chunk_size,
-        embedding_type=embedding_type,
+        chunk_size=config.chunk_size,
+        embedding_type=config.embedding_type,
     )
     return search_index
 
@@ -274,9 +278,8 @@ def answer_question(
         allow_dangerous_deserialization=True,
     )
 
-
     chain = load_qa_with_sources_chain(
-        ChatOpenAI( model_name="gpt-4-turbo", temperature=0.9),
+        ChatOpenAI(model_name="gpt-4-turbo", temperature=0.9),
         prompt=PromptTemplate.from_template(prompt_template or DEFAULT_PROMPT_TEMPLATE),
     )
     answer = chain.invoke(
