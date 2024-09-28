@@ -20,16 +20,17 @@ from flytekit.tools.translator import Options
 from union.remote import UnionRemote
 
 redis_client = redis.Redis(
-  host='eminent-moccasin-23904.upstash.io',
-  port=6379,
-  password=st.secrets['REDIS_KEY'],
-  ssl=True
+    host="eminent-moccasin-23904.upstash.io",
+    port=6379,
+    password=st.secrets["REDIS_KEY"],
+    ssl=True,
 )
 
 N_SAMPLES = 10
 ANSWER_FORMAT = {
     "answer_1": "Answer 1",
     "answer_2": "Answer 2",
+    "both": "Both are correct",
     "neither": "Neither are correct",
 }
 
@@ -42,8 +43,8 @@ if "current_question_id" not in st.session_state:
     st.session_state.current_question_id = None
 if "username" not in st.session_state:
     st.session_state.username = ""
-if "user_level" not in st.session_state:
-    st.session_state.user_level = 0
+# if "user_level" not in st.session_state:
+#     st.session_state.user_level = 0
 if "annotations" not in st.session_state:
     st.session_state.annotations = {}
 if "current_question_index" not in st.session_state:
@@ -52,7 +53,6 @@ if "email" not in st.session_state:
     st.session_state.email = ""
 if "execution_id" not in st.session_state:
     st.session_state.execution_id = None
-
 
 
 @st.cache_data(show_spinner=False)
@@ -119,7 +119,9 @@ def format_func(answer: str) -> str:
 
 def get_user_annotation_count(username):
     """Get the annotation count for a specific user."""
-    return int(redis_client.get(f"user_annotations:{username}") or 0)  # Default to 0 if the user does not exist
+    return int(
+        redis_client.get(f"user_annotations:{username}") or 0
+    )  # Default to 0 if the user does not exist
 
 
 def get_all_users():
@@ -129,11 +131,14 @@ def get_all_users():
     user_data = {}
 
     for key in user_keys:
-        username = key.decode("utf-8").split(":")[1]  # Extract the username from the key
+        username = key.decode("utf-8").split(":")[
+            1
+        ]  # Extract the username from the key
         count = get_user_annotation_count(username)
         user_data[username] = count
 
     return user_data
+
 
 # Update user's annotation count
 def update_user_annotations(username, count=1):
@@ -141,8 +146,11 @@ def update_user_annotations(username, count=1):
     user_key = f"user_annotations:{username}"
 
     # Increment the annotation count for the specified user
-    new_count = redis_client.incrby(user_key, count)  # Use incrby to increment the value
+    new_count = redis_client.incrby(
+        user_key, count
+    )  # Use incrby to increment the value
     return new_count
+
 
 # Get achievement based on annotation count
 def get_achievement(count):
@@ -157,6 +165,7 @@ def get_achievement(count):
     else:
         return "🌟", 0
 
+
 # Send Slack notification
 def send_slack_notification(username, level):
     slack_token = st.secrets["SLACK_API_TOKEN"]
@@ -168,14 +177,11 @@ def send_slack_notification(username, level):
         f"🥉 Bronze brilliance! {username} leveled up to Bronze Annotator! They're on fire... well, more like a warm glow, but still impressive!",
         f"🥈 Silver success! {username} just reached Silver Annotator status! They're shining brighter than a full moon on a clear night!",
         f"🥇 Gold glory! {username} has ascended to Gold Annotator! They're practically radiating awesomeness at this point!",
-        f"🏆 Bow down to the new Annotation Master! {username} has reached the pinnacle of annotation greatness! We're not worthy! We're not worthy!"
+        f"🏆 Bow down to the new Annotation Master! {username} has reached the pinnacle of annotation greatness! We're not worthy! We're not worthy!",
     ]
 
     try:
-        response = client.chat_postMessage(
-            channel=channel,
-            text=messages[level]
-        )
+        client.chat_postMessage(channel=channel, text=messages[level])
     except SlackApiError as e:
         st.error(f"Error sending message to Slack: {e}")
 
@@ -192,42 +198,42 @@ def send_slack_notification(username, level):
 #     placeholder = st.empty()
 
 
-def annotation_page():
-    st.title("🤖 Helpabot.")
-    st.write(
-        "*Help a bot out by picking the more factually correct "
-        "answer, i.e. the answer with fewer mistakes.* "
-    )
-
+def annotation_page(username: str):
     # Username input
-    username = st.text_input("Enter your username:", value=st.session_state.username)
-    if username:
-        st.session_state.username = username
 
     if not username:
         st.warning("Please enter a username to start annotating.")
         return
-    
+
+    curr_user_annotation_count = get_user_annotation_count(username)
+    curr_achievement, curr_level = get_achievement(curr_user_annotation_count)
+
     with st.spinner("Starting a new annotation session..."):
         annotation_data, execution_id, url = get_annotation_data()
         st.session_state.execution_id = execution_id
 
-    st.write("Below is a question about Flyte or Union and two answers to the question.")
+    st.write("## Instructions:")
+    st.write(
+        "Below is a question about Flyte or Union and two answers to the question."
+    )
 
-    question_ids = [q["id"] for q in annotation_data]
     if len(st.session_state.annotations) == len(annotation_data):
-        st.write("You've answered all the questions!")
-        
+        st.write("🎉 You've completed this annotation task!")
+
         new_session = st.button("Start new session")
         if new_session:
             refresh_session()
 
-        st.stop()
+        return
 
+    st.write(f"Annotation session: [{execution_id}]({url})")
+    st.warning("If you refresh the page, your progress will be lost.")
     data_point = annotation_data[st.session_state.current_question_index]
 
     question_container = st.container(border=True)
-    answer_columns = st.columns([4, 4, 1])
+    percent_complete = len(st.session_state.annotations) / len(annotation_data)
+    st.progress(percent_complete, f"Percent complete: {percent_complete * 100:.0f}%")
+    # answer_columns = st.columns([4, 4, 1])
 
     answer_1_column, answer_2_column = st.columns(2)
 
@@ -237,7 +243,7 @@ def annotation_page():
 
     answers = data_point["answers"]
     label = st.radio(
-        "Select the more factually correct answer.",
+        "Select the factually correct answer.",
         options=ANSWER_FORMAT.keys(),
         index=None,
         format_func=format_func,
@@ -275,19 +281,41 @@ def annotation_page():
     submitted = st.button("Submit", disabled=label is None)
 
     if submitted:
-        st.write("Thank you for your submission!")
-        st.session_state.question_ids_answered.append(data_point["id"])
-        st.write(f"Submission: {label, correct_answer_text}")
-        new_count = update_user_annotations(username)
-        new_achievement, new_level = get_achievement(new_count)
-        if new_level > st.session_state.user_level:
-            st.session_state.user_level = new_level
-            send_slack_notification(username, new_level)
-        unanswered = [q for q in question_ids if q not in st.session_state.question_ids_answered]
-        if len(unanswered) > 0:
-            st.session_state.current_question_id = random.choice(unanswered)
-        # TODO: send feedback back to the serverless execution via UnionRemote
+        preferred_answer = (
+            answers[0]
+            if label == "answer_1"
+            else answers[1]
+            if label == "answer_2"
+            else label
+            if label == "both"
+            else None
+        )
+        st.session_state.annotations[data_point["id"]] = {
+            "question_id": data_point["id"],
+            "question": data_point["question"],
+            "preferred_answer": preferred_answer,
+            "label": label,
+            "correct_answer_text": correct_answer_text,
+        }
+
+        if len(annotation_data) - len(st.session_state.annotations) > 0:
+            st.session_state.current_question_index += 1
+        else:
+
+            @st.dialog("Submitting annotations...")
+            def submitting():
+                with st.spinner("🗂️ ⬆️ ☁️"):
+                    submit_annotations(st.session_state.annotations, execution_id)
+                    new_count = update_user_annotations(username)
+                    new_achievement, new_level = get_achievement(new_count)
+                    if new_level > curr_level:
+                        # st.session_state.user_level = new_level
+                        send_slack_notification(username, new_level)
+
+            submitting()
+
         st.rerun()
+
 
 def leaderboard_page():
     st.title("Leaderboard")
@@ -313,13 +341,24 @@ def leaderboard_page():
         st.write("🥇 Gold Annotator: 50-99 annotations")
         st.write("🏆 Annotation Master: 100+ annotations")
 
+
 def main():
+    with st.sidebar:
+        st.title("🤖 Helpabot.")
+        st.write("Help a bot out by selecting factually correct answers.")
+        username = st.text_input(
+            "Enter your username to start a session:", value=st.session_state.username
+        )
+        if username:
+            st.session_state.username = username
+
     tab1, tab2 = st.tabs(["Annotation", "Leaderboard"])
 
     with tab1:
-        annotation_page()
+        annotation_page(username)
     with tab2:
         leaderboard_page()
+
 
 if __name__ == "__main__":
     main()
