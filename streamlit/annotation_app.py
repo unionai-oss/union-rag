@@ -36,6 +36,7 @@ ANSWER_FORMAT = {
 
 
 st.set_page_config(layout="wide")
+session_id = st.runtime.scriptrunner.get_script_run_ctx().session_id
 
 
 # Initialize session state
@@ -56,7 +57,7 @@ if "execution_id" not in st.session_state:
 
 
 @st.cache_data(show_spinner=False)
-def get_annotation_data() -> tuple[list[dict], str]:
+def get_annotation_data(username: str, session_id: str) -> tuple[list[dict], str]:
     """
     Gets a new set of question and answer-pair triplets on every page load.
     """
@@ -190,13 +191,6 @@ def send_slack_notification(username, level):
 # Main app
 ##########
 
-# with st.sidebar:
-#     st.write("Enter your email to enter the leaderboard")
-#     email = st.text_input("Email", value=st.session_state.email)
-#     if email:
-#         st.session_state.email = email
-#     placeholder = st.empty()
-
 
 def annotation_page(username: str):
     # Username input
@@ -206,10 +200,10 @@ def annotation_page(username: str):
         return
 
     curr_user_annotation_count = get_user_annotation_count(username)
-    curr_achievement, curr_level = get_achievement(curr_user_annotation_count)
+    _, curr_level = get_achievement(curr_user_annotation_count)
 
     with st.spinner("Starting a new annotation session..."):
-        annotation_data, execution_id, url = get_annotation_data()
+        annotation_data, execution_id, url = get_annotation_data(username, session_id)
         st.session_state.execution_id = execution_id
 
     st.write("#### Instructions:")
@@ -227,20 +221,31 @@ def annotation_page(username: str):
         return
 
     st.write(f"Annotation session: [{execution_id}]({url})")
-    st.warning("If you refresh the page, your progress will be lost.")
+    st.warning(
+        "Refreshing the page will start a new session and your progress will be lost."
+    )
     data_point = annotation_data[st.session_state.current_question_index]
 
     percent_complete = len(st.session_state.annotations) / len(annotation_data)
     st.progress(percent_complete, f"Percent complete: {percent_complete * 100:.0f}%")
 
-    question_column, answer_column = st.columns(2)
-
-    with question_column:
-        c = st.container(border=True, height=320)
-        c.write("**Question**")
-        c.write(data_point["question"])
-
     answers = data_point["answers"]
+
+    with st.container(border=True):
+        question_column, answer_column = st.columns(2)
+        with question_column:
+            st.write("**Question**")
+            st.write(data_point["question"])
+
+            with answer_column:
+                c = st.container(border=True)
+                c.write("**Answer 1**")
+                c.write(answers[0])
+
+                c = st.container(border=True)
+                c.write("**Answer 2**")
+                c.write(answers[1])
+
     label = st.radio(
         "Select the better answer based on factual accuracy.",
         options=ANSWER_FORMAT.keys(),
@@ -248,15 +253,6 @@ def annotation_page(username: str):
         format_func=format_func,
         key=f"radio-{data_point['id']}",
     )
-
-    with answer_column:
-        c = st.container(border=True, height=150)
-        c.write("**Answer 1**")
-        c.write(answers[0])
-
-        c = st.container(border=True, height=150)
-        c.write("**Answer 2**")
-        c.write(answers[1])
 
     correct_answer_text = None
     if label == "neither":
@@ -336,7 +332,8 @@ def main():
         st.title("🤖 Helpabot.")
         st.write("Help a bot out by selecting factually correct answers.")
         username = st.text_input(
-            "Enter your username to start a session:", value=st.session_state.username
+            "Enter your username to start a session:",
+            value=st.session_state.username,
         )
         if username:
             st.session_state.username = username
