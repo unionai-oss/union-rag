@@ -46,3 +46,15 @@ Run the app
 ```bash
 streamlit run streamlit/annotation_app.py
 ```
+
+Create the eval dataset:
+
+```bash
+union run --remote union_rag/eval_dataset.py create_eval_dataset --min_annotations_per_question 1
+```
+
+Evaluate a RAG experiment:
+
+```bash
+union run --remote union_rag/eval_rag.py evaluate_simple_rag --eval_configs eval_inputs.yaml
+```

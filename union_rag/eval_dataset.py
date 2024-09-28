@@ -2,7 +2,7 @@
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Optional
 
 import pandas as pd
@@ -10,7 +10,8 @@ from collections import defaultdict
 from itertools import groupby
 from typing import Annotated
 
-from flytekit import task, workflow, Artifact, ImageSpec, Secret, current_context
+from flytekit import task, workflow, Artifact, ImageSpec, Secret, current_context, Deck
+from flytekit.deck import TopFrameRenderer
 from flytekit.models.filters import ValueIn
 from flytekit.remote.remote import MOST_RECENT_FIRST
 from union.remote import UnionRemote
@@ -41,7 +42,7 @@ class RawRanking:
 
 @dataclass
 class ReferenceAnswer:
-    id: int
+    question_id: int
     question: str
     reference_answer: str
     is_user_generated: bool
@@ -56,14 +57,14 @@ def create_comparison_data(
     comparisons = []
     user_reference_answers = []
     for annotation in annotations:
-        if annotation.user_answer is not None:
+        if annotation.correct_answer_text is not None:
             user_reference_answers.append(
-                {
-                    "id": annotation.id,
-                    "question": annotation.question,
-                    "reference_answer": annotation.correct_answer_text,
-                    "is_user_generated": True,
-                }
+                ReferenceAnswer(
+                    question_id=annotation.question_id,
+                    question=annotation.question,
+                    reference_answer=annotation.correct_answer_text,
+                    is_user_generated=True,
+                )
             )
             continue
         comparisons.append(annotation)
@@ -106,37 +107,38 @@ def calculate_elo_rankings(
 
     # initialize ratings for all answers
     for annotation in comparisons:
-        for answer in [annotation["answer_1"], annotation["answer_2"]]:
+        for answer in annotation.answers:
             if answer not in ratings:
                 ratings[answer] = 1500.0
             if answer not in answer_to_question:
-                answer_to_question[answer] = (annotation["id"], annotation["question"])
+                answer_to_question[answer] = annotation.question_id, annotation.question
 
     # update the ratings based on the comparisons
     for annotation in comparisons:
         score = 0.0
         if annotation.label == "both":
             score = 0.5
-        elif annotation["answer_1"] in annotation["preferred_answer"]:
+        elif annotation.label == "answer_1":
             score = 1.0
-        elif annotation["answer_2"] in annotation["preferred_answer"]:
+        elif annotation.label == "answer_2":
             score = 0.0
 
-        rating_1, rating_2 = (
-            ratings[annotation["answer_1"]],
-            ratings[annotation["answer_2"]],
-        )
+        answer_1, answer_2 = annotation.answers[0], annotation.answers[1]
+        rating_1, rating_2 = ratings[answer_1], ratings[answer_2]
         new_rating_1, new_rating_2 = update_ratings(rating_1, rating_2, score, K=K)
-        ratings[annotation["answer_1"]] = new_rating_1
-        ratings[annotation["answer_2"]] = new_rating_2
+        ratings[answer_1] = new_rating_1
+        ratings[answer_2] = new_rating_2
 
     return ratings, answer_to_question
 
 
 def rank_annotations_per_question(
     annotations: list[Annotation],
-) -> tuple[list[ReferenceAnswer], list[RawRanking]]:
+) -> tuple[list[ReferenceAnswer], Optional[list[RawRanking]]]:
     comparisons, user_reference_answers = create_comparison_data(annotations)
+    if not comparisons:
+        return user_reference_answers, None
+
     rankings, answer_to_question_id = calculate_elo_rankings(comparisons)
 
     annotated_reference_answers = []
@@ -160,10 +162,10 @@ def rank_annotations_per_question(
     question_id, question = answer_to_question_id[best_answer]
     annotated_reference_answers.append(
         ReferenceAnswer(
-            id=question_id,
+            question_id=question_id,
             question=question,
             reference_answer=best_answer,
-            is_user_generated=True,
+            is_user_generated=False,
         )
     )
 
@@ -190,7 +192,7 @@ def collect_annotations() -> list[Annotation]:
             limit=2,
             filters=[
                 ValueIn("execution_tag.key", [LABEL_KEY]),
-                ValueIn("execution_tag.value", [LABEL_KEY]),
+                ValueIn("execution_tag.value", [LABEL_VALUE]),
                 ValueIn("phase", ["SUCCEEDED"]),
             ],
             sort_by=MOST_RECENT_FIRST,
@@ -208,42 +210,52 @@ def collect_annotations() -> list[Annotation]:
         for _, row in data.items():
             annotation_data.append(
                 Annotation(
-                    id=int(row["question_id"]),
+                    question_id=int(row["question_id"]),
                     question=row["question"],
-                    preferred_answer=row["preferred_answer"],
-                    correct_answer_text=row["correct_answer_text"],
+                    answers=row["answers"],
                     label=row["label"],
+                    correct_answer_text=row["correct_answer_text"],
                 )
             )
 
     return annotation_data
 
 
-@task(container_image=image)
+@task(container_image=image, enable_deck=True)
 def create_dataset(
     annotations: list[Annotation],
     min_annotations_per_question: int,
-) -> tuple[Annotated[pd.DataFrame, EvalDatasetArtifact], pd.DataFrame]:
-    sorted_annotations = sorted(annotations, key=lambda x: x.id)
+) -> tuple[Annotated[pd.DataFrame, EvalDatasetArtifact], Optional[pd.DataFrame]]:
+    sorted_annotations = sorted(annotations, key=lambda x: x.question_id)
 
     all_reference_answers = []
     all_raw_rankings = []
 
-    for _, annotations_by_question in groupby(sorted_annotations, key=lambda x: x.id):
+    for _, annotations_by_question in groupby(
+        sorted_annotations, key=lambda x: x.question_id
+    ):
         annotations_by_question = list(annotations_by_question)
-        if len(annotations_by_question) <= min_annotations_per_question:
+        if len(annotations_by_question) < min_annotations_per_question:
             print(
-                f"Skipping question {annotations_by_question[0].id} "
-                "because it has less than {min_annotations_per_question} annotations"
+                f"Skipping question {annotations_by_question[0].question_id} "
+                f"because it has less than {min_annotations_per_question} annotations"
             )
             continue
         reference_answers, raw_rankings = rank_annotations_per_question(
             annotations_by_question
         )
         all_reference_answers.extend(reference_answers)
-        all_raw_rankings.extend(raw_rankings)
+        if raw_rankings is not None:
+            all_raw_rankings.extend(raw_rankings)
 
-    return pd.DataFrame(all_reference_answers), pd.DataFrame(all_raw_rankings)
+    if all_raw_rankings is not None:
+        all_raw_rankings = pd.DataFrame(all_raw_rankings)
+
+    reference_answers_df = pd.DataFrame([asdict(a) for a in all_reference_answers])
+    current_context().decks.insert(
+        0, Deck("Eval Dataset", TopFrameRenderer(10).to_html(reference_answers_df))
+    )
+    return reference_answers_df, all_raw_rankings
 
 
 @workflow
