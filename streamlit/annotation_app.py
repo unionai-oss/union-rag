@@ -30,7 +30,6 @@ N_SAMPLES = 10
 ANSWER_FORMAT = {
     "answer_1": "Answer 1",
     "answer_2": "Answer 2",
-    "both": "Both are correct",
     "neither": "Neither are correct",
 }
 
@@ -70,7 +69,7 @@ def get_annotation_data() -> tuple[list[dict], str]:
         inputs={"random_seed": seed, "n_samples": N_SAMPLES},
         options=Options(
             # Replace ':' with '_' since flyte does not allow ':' in the label value
-            labels=Labels(values={"union_annotator": "union_annotator"}),
+            labels=Labels(values={"union_annotator": "testing0"}),
         ),
     )
     url = remote.generate_console_url(execution)
@@ -242,7 +241,7 @@ def annotation_page(username: str):
 
     answers = data_point["answers"]
     label = st.radio(
-        "Select the factually correct answer.",
+        "Select the better answer based on factual accuracy.",
         options=ANSWER_FORMAT.keys(),
         index=None,
         format_func=format_func,
@@ -279,19 +278,11 @@ def annotation_page(username: str):
     submitted = st.button("Submit", disabled=label is None)
 
     if submitted:
-        preferred_answer = (
-            [answers[0]]
-            if label == "answer_1"
-            else [answers[1]]
-            if label == "answer_2"
-            else answers
-            if label == "both"
-            else []
-        )
+        label = 0 if label == "answer_1" else 1 if label == "answer_2" else -1
         st.session_state.annotations[data_point["id"]] = {
             "question_id": data_point["id"],
             "question": data_point["question"],
-            "preferred_answer": preferred_answer,
+            "answers": answers,
             "label": label,
             "correct_answer_text": correct_answer_text,
         }
@@ -342,7 +333,7 @@ def leaderboard_page():
 
 def main():
     with st.sidebar:
-        st.title("🤖 Halpabot.")
+        st.title("🤖 Helpabot.")
         st.write("Help a bot out by selecting factually correct answers.")
         username = st.text_input(
             "Enter your username to start a session:", value=st.session_state.username

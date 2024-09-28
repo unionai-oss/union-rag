@@ -1,139 +1,67 @@
 """Create an evaluation dataset based on human annotations."""
 
+import json
+import os
+from dataclasses import dataclass
+from typing import Optional
+
 import pandas as pd
 from collections import defaultdict
 from itertools import groupby
 from typing import Annotated
 
-from flytekit import task, workflow, Artifact, ImageSpec
+from flytekit import task, workflow, Artifact, ImageSpec, Secret, current_context
+from flytekit.models.filters import ValueIn
+from flytekit.remote.remote import MOST_RECENT_FIRST
+from union.remote import UnionRemote
 
 
 image = ImageSpec(packages=["pandas", "pyarrow"])
 
+
 EvalDatasetArtifact = Artifact(name="test-eval-dataset")
 
 
-MOCK_DATASET = [
-    {
-        "id": 1,
-        "question": "Who wrote the Lord of the Rings?",
-        "answer_1": "J.R.R. Tolkien",
-        "answer_2": "C.S. Lewis",
-        "preferred_answer": "J.R.R. Tolkien",
-        "user_answer": None,
-    },
-    {
-        "id": 1,
-        "question": "Who wrote the Lord of the Rings?",
-        "answer_1": "John Ronald Reuel Tolkien",
-        "answer_2": "J.R.R. Tolkien",
-        "preferred_answer": "J.R.R. Tolkien",
-        "user_answer": None,
-    },
-    {
-        "id": 1,
-        "question": "Who wrote the Lord of the Rings?",
-        "answer_1": "Roald Dahl",
-        "answer_2": "J.R.R. Tolkien",
-        "preferred_answer": "J.R.R. Tolkien",
-        "user_answer": None,
-    },
-    {
-        "id": 1,
-        "question": "Who wrote the Lord of the Rings?",
-        "answer_1": "John Ronald Reuel Tolkien",
-        "answer_2": "C.S. Lewis",
-        "preferred_answer": "John Ronald Reuel Tolkien",
-        "user_answer": None,
-    },
-    {
-        "id": 2,
-        "question": "Where is the Nile River located?",
-        "answer_1": "Egypt",
-        "answer_2": "Russia",
-        "preferred_answer": None,
-        "user_answer": "Northeastern Africa, spanning Egypt to Kenya and Ethiopia",
-    },
-    {
-        "id": 2,
-        "question": "Where is the Nile River located?",
-        "answer_1": "Egypt",
-        "answer_2": "Russia",
-        "preferred_answer": "Egypt",
-        "user_answer": None,
-    },
-    {
-        "id": 2,
-        "question": "Where is the Nile River located?",
-        "answer_1": "Egypt",
-        "answer_2": "Northeastern Africa",
-        "preferred_answer": "Northeastern Africa",
-        "user_answer": None,
-    },
-    {
-        "id": 2,
-        "question": "Where is the Nile River located?",
-        "answer_1": "Sudan",
-        "answer_2": "Northeastern Africa",
-        "preferred_answer": "Northeastern Africa",
-        "user_answer": None,
-    },
-    {
-        "id": 2,
-        "question": "Where is the Nile River located?",
-        "answer_1": "Kenya",
-        "answer_2": "Northeastern Africa",
-        "preferred_answer": "Northeastern Africa",
-        "user_answer": None,
-    },
-    {
-        "id": 2,
-        "question": "Where is the Nile River located?",
-        "answer_1": "Uganda",
-        "answer_2": "Northeastern Africa",
-        "preferred_answer": "Northeastern Africa",
-        "user_answer": None,
-    },
-    {
-        "id": 2,
-        "question": "Where is the Nile River located?",
-        "answer_1": "Uganda",
-        "answer_2": "England",
-        "preferred_answer": "Uganda",
-        "user_answer": None,
-    },
-    {
-        "id": 2,
-        "question": "Where is the Nile River located?",
-        "answer_1": "Sudan",
-        "answer_2": "England",
-        "preferred_answer": "Sudan",
-        "user_answer": None,
-    },
-    {
-        "id": 2,
-        "question": "Where is the Nile River located?",
-        "answer_1": "Kenya",
-        "answer_2": "England",
-        "preferred_answer": "Kenya",
-        "user_answer": None,
-    },
-]
+@dataclass
+class Annotation:
+    question_id: int
+    question: str
+    answers: list[str]
+    label: str
+    correct_answer_text: Optional[str]
 
 
-def create_comparison_data(annotations: list[dict]) -> tuple[list[dict], list[dict]]:
+@dataclass
+class RawRanking:
+    id: int
+    question: str
+    answer: str
+    elo_rating: float
+
+
+@dataclass
+class ReferenceAnswer:
+    id: int
+    question: str
+    reference_answer: str
+    is_user_generated: bool
+
+
+def create_comparison_data(
+    annotations: list[Annotation],
+) -> tuple[list[Annotation], list[ReferenceAnswer]]:
     """
     Create a list of comparisons between annotations.
     """
     comparisons = []
     user_reference_answers = []
     for annotation in annotations:
-        if annotation["user_answer"] is not None:
+        if annotation.user_answer is not None:
             user_reference_answers.append(
                 {
-                    "id": annotation["id"],
-                    "question": annotation["question"],
-                    "reference_answer": annotation["user_answer"],
+                    "id": annotation.id,
+                    "question": annotation.question,
+                    "reference_answer": annotation.correct_answer_text,
                     "is_user_generated": True,
                 }
             )
@@ -166,7 +94,7 @@ def update_ratings(
 
 
 def calculate_elo_rankings(
-    comparisons: list[dict], K: int = 32
+    comparisons: list[Annotation], K: int = 32
 ) -> tuple[defaultdict, dict]:
     """
     Calculate the ELO rankings for the comparisons.
@@ -177,33 +105,37 @@ def calculate_elo_rankings(
     answer_to_question = {}
 
     # initialize ratings for all answers
-    for item in comparisons:
-        for answer in [item["answer_1"], item["answer_2"]]:
+    for annotation in comparisons:
+        for answer in [annotation["answer_1"], annotation["answer_2"]]:
             if answer not in ratings:
                 ratings[answer] = 1500.0
             if answer not in answer_to_question:
-                answer_to_question[answer] = (item["id"], item["question"])
+                answer_to_question[answer] = (annotation["id"], annotation["question"])
 
     # update the ratings based on the comparisons
-    for item in comparisons:
-        if item["answer_1"] == item["preferred_answer"]:
-            score = 1.0
-        elif item["answer_2"] == item["preferred_answer"]:
-            score = 0.0
-        else:
+    for annotation in comparisons:
+        score = 0.0
+        if annotation.label == "both":
             score = 0.5
+        elif annotation["answer_1"] in annotation["preferred_answer"]:
+            score = 1.0
+        elif annotation["answer_2"] in annotation["preferred_answer"]:
+            score = 0.0
 
-        rating_1, rating_2 = ratings[item["answer_1"]], ratings[item["answer_2"]]
+        rating_1, rating_2 = (
+            ratings[annotation["answer_1"]],
+            ratings[annotation["answer_2"]],
+        )
         new_rating_1, new_rating_2 = update_ratings(rating_1, rating_2, score, K=K)
-        ratings[item["answer_1"]] = new_rating_1
-        ratings[item["answer_2"]] = new_rating_2
+        ratings[annotation["answer_1"]] = new_rating_1
+        ratings[annotation["answer_2"]] = new_rating_2
 
     return ratings, answer_to_question
 
 
 def rank_annotations_per_question(
-    annotations: list[dict],
-) -> tuple[list[dict], list[dict]]:
+    annotations: list[Annotation],
+) -> tuple[list[ReferenceAnswer], list[RawRanking]]:
     comparisons, user_reference_answers = create_comparison_data(annotations)
     rankings, answer_to_question_id = calculate_elo_rankings(comparisons)
 
@@ -215,51 +147,94 @@ def rank_annotations_per_question(
     for answer, rating in sorted_rankings:
         question_id, question = answer_to_question_id[answer]
         raw_rankings.append(
-            {
-                "id": question_id,
-                "question": question,
-                "answer": answer,
-                "elo_rating": rating,
-            }
+            RawRanking(
+                id=question_id,
+                question=question,
+                answer=answer,
+                elo_rating=rating,
+            )
         )
 
     # collect best answer for this question
     best_answer = sorted_rankings[0][0]
     question_id, question = answer_to_question_id[best_answer]
     annotated_reference_answers.append(
-        {
-            "id": question_id,
-            "question": question,
-            "reference_answer": best_answer,
-            "is_user_generated": True,
-        }
+        ReferenceAnswer(
+            id=question_id,
+            question=question,
+            reference_answer=best_answer,
+            is_user_generated=True,
+        )
     )
 
     return [*annotated_reference_answers, *user_reference_answers], raw_rankings
 
 
-@task(container_image=image)
-def collect_annotations() -> list[dict]:
-    return MOCK_DATASET
+LABEL_KEY = "union_annotator"
+LABEL_VALUE = "testing0"
+
+
+@task(
+    container_image=image,
+    secret_requests=[Secret(key="helpabot_app_key")],
+)
+def collect_annotations() -> list[Annotation]:
+    os.environ["UNION_API_KEY"] = current_context().secrets.get(key="helpabot_app_key")
+    remote = UnionRemote(default_project="flytesnacks", default_domain="development")
+    token = None
+    _executions = []
+    while True:
+        executions, token = remote.client.list_executions_paginated(
+            project="flytesnacks",
+            domain="development",
+            limit=2,
+            filters=[
+                ValueIn("execution_tag.key", [LABEL_KEY]),
+                ValueIn("execution_tag.value", [LABEL_KEY]),
+                ValueIn("phase", ["SUCCEEDED"]),
+            ],
+            sort_by=MOST_RECENT_FIRST,
+            token=token,
+        )
+        _executions.extend(executions)
+        if not token:
+            break
+
+    annotation_data = []
+    for ex in _executions:
+        execution = remote.fetch_execution(name=ex.id.name)
+        output, *_ = execution.outputs.values()
+        data = json.loads(output)
+        for _, row in data.items():
+            annotation_data.append(
+                Annotation(
+                    id=int(row["question_id"]),
+                    question=row["question"],
+                    preferred_answer=row["preferred_answer"],
+                    correct_answer_text=row["correct_answer_text"],
+                    label=row["label"],
+                )
+            )
+
+    return annotation_data
 
 
 @task(container_image=image)
 def create_dataset(
-    annotations: list[dict],
+    annotations: list[Annotation],
     min_annotations_per_question: int,
 ) -> tuple[Annotated[pd.DataFrame, EvalDatasetArtifact], pd.DataFrame]:
-    sorted_annotations = sorted(annotations, key=lambda x: x["id"])
+    sorted_annotations = sorted(annotations, key=lambda x: x.id)
 
     all_reference_answers = []
     all_raw_rankings = []
 
-    for _, annotations_by_question in groupby(
-        sorted_annotations, key=lambda x: x["id"]
-    ):
+    for _, annotations_by_question in groupby(sorted_annotations, key=lambda x: x.id):
         annotations_by_question = list(annotations_by_question)
         if len(annotations_by_question) <= min_annotations_per_question:
             print(
-                f"Skipping question {annotations_by_question[0]['id']} because it has less than 10 annotations"
+                f"Skipping question {annotations_by_question[0].id} "
+                "because it has less than {min_annotations_per_question} annotations"
             )
             continue
         reference_answers, raw_rankings = rank_annotations_per_question(
@@ -272,7 +247,7 @@ def create_dataset(
 
 
 @workflow
-def create_eval_dataset(min_annotations_per_question: int = 3) -> pd.DataFrame:
+def create_eval_dataset(min_annotations_per_question: int = 1) -> pd.DataFrame:
     annotations = collect_annotations()
     out, _ = create_dataset(annotations, min_annotations_per_question)
     return out
