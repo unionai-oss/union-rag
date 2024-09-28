@@ -70,7 +70,7 @@ def get_annotation_data() -> tuple[list[dict], str]:
         inputs={"random_seed": seed, "n_samples": N_SAMPLES},
         options=Options(
             # Replace ':' with '_' since flyte does not allow ':' in the label value
-            labels=Labels(values={"app": "union_annotator"}),
+            labels=Labels(values={"union_annotator": "union_annotator"}),
         ),
     )
     url = remote.generate_console_url(execution)
@@ -212,7 +212,7 @@ def annotation_page(username: str):
         annotation_data, execution_id, url = get_annotation_data()
         st.session_state.execution_id = execution_id
 
-    st.write("## Instructions:")
+    st.write("#### Instructions:")
     st.write(
         "Below is a question about Flyte or Union and two answers to the question."
     )
@@ -230,16 +230,15 @@ def annotation_page(username: str):
     st.warning("If you refresh the page, your progress will be lost.")
     data_point = annotation_data[st.session_state.current_question_index]
 
-    question_container = st.container(border=True)
     percent_complete = len(st.session_state.annotations) / len(annotation_data)
     st.progress(percent_complete, f"Percent complete: {percent_complete * 100:.0f}%")
-    # answer_columns = st.columns([4, 4, 1])
 
-    answer_1_column, answer_2_column = st.columns(2)
+    question_column, answer_column = st.columns(2)
 
-    with question_container:
-        st.write("**Question**")
-        st.write(data_point["question"])
+    with question_column:
+        c = st.container(border=True, height=320)
+        c.write("**Question**")
+        c.write(data_point["question"])
 
     answers = data_point["answers"]
     label = st.radio(
@@ -250,14 +249,13 @@ def annotation_page(username: str):
         key=f"radio-{data_point['id']}",
     )
 
-    with answer_1_column:
-        c = st.container(border=True)
+    with answer_column:
+        c = st.container(border=True, height=150)
         c.write("**Answer 1**")
         c.write(answers[0])
 
-    with answer_2_column:
-        c = st.container(border=True)
-        c.write("Answer 2")
+        c = st.container(border=True, height=150)
+        c.write("**Answer 2**")
         c.write(answers[1])
 
     correct_answer_text = None
@@ -282,11 +280,11 @@ def annotation_page(username: str):
 
     if submitted:
         preferred_answer = (
-            answers[0]
+            [answers[0]]
             if label == "answer_1"
-            else answers[1]
+            else [answers[1]]
             if label == "answer_2"
-            else label
+            else answers
             if label == "both"
             else None
         )
@@ -306,7 +304,7 @@ def annotation_page(username: str):
             def submitting():
                 with st.spinner("🗂️ ⬆️ ☁️"):
                     submit_annotations(st.session_state.annotations, execution_id)
-                    new_count = update_user_annotations(username)
+                    new_count = update_user_annotations(username, count=N_SAMPLES)
                     new_achievement, new_level = get_achievement(new_count)
                     if new_level > curr_level:
                         # st.session_state.user_level = new_level
@@ -344,7 +342,7 @@ def leaderboard_page():
 
 def main():
     with st.sidebar:
-        st.title("🤖 Helpabot.")
+        st.title("🤖 Halpabot.")
         st.write("Help a bot out by selecting factually correct answers.")
         username = st.text_input(
             "Enter your username to start a session:", value=st.session_state.username
