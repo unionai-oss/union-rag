@@ -163,5 +163,4 @@ def data_synthesis_workflow(
         generate_qa_pairs, n_questions=n_questions, n_answers=n_answers
     )
     questions_and_answers = map_task(partial_task)(flyte_doc=documents)
-    dataset = create_dataset(questions_and_answers=questions_and_answers)
-    return dataset
+    return create_dataset(questions_and_answers=questions_and_answers)

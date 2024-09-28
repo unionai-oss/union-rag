@@ -53,6 +53,8 @@ union run --remote union_rag/agentic_rag.py ask_with_feedback \
    --question 'Write a flytekit workflow that trains an sklearn model on the wine dataset.'
 ```
 
+Refer to the [EVALUATION.md](./EVALUATION.md) section to learn how to evaluate the RAG workflows.
+
 ## Slack App Deployment
 
 <details>
