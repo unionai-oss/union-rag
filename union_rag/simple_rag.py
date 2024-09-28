@@ -23,6 +23,7 @@ from flytekit.types.directory import FlyteDirectory
 from flytekit.types.file import FlyteFile
 from mashumaro.mixins.json import DataClassJSONMixin
 from union.artifacts import DataCard
+from union.actor import ActorEnvironment
 
 from union_rag.document import CustomDocument
 from union_rag.utils import openai_env_secret
@@ -254,13 +255,16 @@ def create_knowledge_base(config: RAGConfig) -> FlyteDirectory:
 # GPT workflow
 # ------------
 
-
-@task(
+actor = ActorEnvironment(
+    name="simple-rag",
+    ttl_seconds=900,
     container_image=image,
     requests=Resources(cpu="2", mem="8Gi"),
     secret_requests=[Secret(key="openai_api_key")],
-    enable_deck=True,
 )
+
+
+@actor.task(enable_deck=True)
 def answer_question(
     question: str,
     search_index: FlyteDirectory = VectorStore.query(embedding_type="openai"),
