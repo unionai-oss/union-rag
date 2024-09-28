@@ -10,21 +10,49 @@ import json
 import random
 import time
 
+import redis
 import streamlit as st
+from slack_sdk import WebClient
+from slack_sdk.errors import SlackApiError
+
 from flytekit import Labels
 from flytekit.tools.translator import Options
 from union.remote import UnionRemote
 
-
-st.set_page_config(layout="wide")
-st.title("🤖 Helpabot.")
-st.write(
-    "*Help a bot out by picking the more factually correct "
-    "answer, i.e. the answer with fewer mistakes.* "
+redis_client = redis.Redis(
+  host='eminent-moccasin-23904.upstash.io',
+  port=6379,
+  password=st.secrets['REDIS_KEY'],
+  ssl=True
 )
 
-
 N_SAMPLES = 10
+ANSWER_FORMAT = {
+    "answer_1": "Answer 1",
+    "answer_2": "Answer 2",
+    "neither": "Neither are correct",
+}
+
+
+st.set_page_config(layout="wide")
+
+
+# Initialize session state
+if "current_question_id" not in st.session_state:
+    st.session_state.current_question_id = None
+if "username" not in st.session_state:
+    st.session_state.username = ""
+if "user_level" not in st.session_state:
+    st.session_state.user_level = 0
+if "annotations" not in st.session_state:
+    st.session_state.annotations = {}
+if "current_question_index" not in st.session_state:
+    st.session_state.current_question_index = 0
+if "email" not in st.session_state:
+    st.session_state.email = ""
+if "execution_id" not in st.session_state:
+    st.session_state.execution_id = None
+
 
 
 @st.cache_data(show_spinner=False)
@@ -76,19 +104,6 @@ def submit_annotations(annotations: dict, execution_id: str):
     print(f"🚀 Submitted annotations to Union Serverless execution: {execution_id}")
 
 
-if "annotations" not in st.session_state:
-    st.session_state.annotations = {}
-
-if "current_question_index" not in st.session_state:
-    st.session_state.current_question_index = 0
-
-if "email" not in st.session_state:
-    st.session_state.email = ""
-
-if "execution_id" not in st.session_state:
-    st.session_state.execution_id = None
-
-
 def refresh_session():
     get_annotation_data.clear()
     st.session_state.annotations = {}
@@ -97,145 +112,214 @@ def refresh_session():
     st.rerun()
 
 
-##########
-# Main app
-##########
-
-with st.sidebar:
-    st.write("Enter your email to enter the leaderboard")
-    email = st.text_input("Email", value=st.session_state.email)
-    if email:
-        st.session_state.email = email
-    placeholder = st.empty()
-
-
-with st.spinner("Starting a new annotation session..."):
-    annotation_data, execution_id, url = get_annotation_data()
-    st.session_state.execution_id = execution_id
-
-# if st.session_state.execution_id is None:
-#     with st.spinner("Starting a new annotation session..."):
-#         annotation_data, execution_id, url = get_annotation_data(n_samples)
-#         st.session_state.execution_id = execution_id
-# else:
-#     new_session = st.button("Start new session")
-#     if new_session:
-#         refresh_session()
-#         annotation_data, execution_id, url = get_annotation_data(n_samples)
-#         st.session_state.execution_id = execution_id
-
-with placeholder.container():
-    st.write(f"Annotation session: [{execution_id}]({url})")
-
-# When all questions are answered, offer to start a new session
-question_ids = [q["id"] for q in annotation_data]
-st.write(f"Annotations: {len(st.session_state.annotations)}")
-if len(st.session_state.annotations) == len(annotation_data):
-    st.write("🎉 You've answered all the questions!")
-
-    new_session = st.button("Start new session")
-    if new_session:
-        refresh_session()
-
-    st.stop()
-
-st.write("## Instructions:")
-st.write("Below is a question about Flyte or Union and two answers to the question.")
-st.warning("If you refresh the page, your progress will be lost.")
-
-
-data_point = [annotation_data[st.session_state.current_question_index]]
-data_point = data_point[0]
-
-ANSWER_FORMAT = {
-    "answer_1": "Answer 1",
-    "answer_2": "Answer 2",
-    "equivalent": "They are equivalent",
-    "neither": "Neither are correct",
-}
-
-
-percent_complete = len(st.session_state.annotations) / len(annotation_data)
-st.progress(percent_complete, f"Percent complete: {percent_complete * 100:.0f}%")
-
-
 @st.cache_data
 def format_func(answer: str) -> str:
     return ANSWER_FORMAT[answer]
 
 
-######################
-# QUESTION ANSWER FORM
-######################
-
-question_container = st.container(border=True)
-answer_1_column, answer_2_column = st.columns(2)
+def get_user_annotation_count(username):
+    """Get the annotation count for a specific user."""
+    return int(redis_client.get(f"user_annotations:{username}") or 0)  # Default to 0 if the user does not exist
 
 
-with question_container:
-    st.write("**Question**")
-    st.write(data_point["question"])
+def get_all_users():
+    """Retrieve all users and their annotation counts."""
+    # Use Redis keys pattern to find all user keys
+    user_keys = redis_client.keys("user_annotations:*")
+    user_data = {}
 
-answers = data_point["answers"]
+    for key in user_keys:
+        username = key.decode("utf-8").split(":")[1]  # Extract the username from the key
+        count = get_user_annotation_count(username)
+        user_data[username] = count
 
-with answer_1_column:
-    c = st.container(border=True)
-    c.write("**Answer 1**")
-    c.write(answers[0])
+    return user_data
 
-with answer_2_column:
-    c = st.container(border=True)
-    c.write("**Answer 2**")
-    c.write(answers[1])
+# Update user's annotation count
+def update_user_annotations(username, count=1):
+    # Create a unique key for each user based on their username
+    user_key = f"user_annotations:{username}"
 
+    # Increment the annotation count for the specified user
+    new_count = redis_client.incrby(user_key, count)  # Use incrby to increment the value
+    return new_count
 
-label = st.radio(
-    "Select the more factually correct answer.",
-    options=ANSWER_FORMAT.keys(),
-    index=None,
-    format_func=format_func,
-    key=f"radio-{data_point['id']}",
-)
-
-correct_answer_text = None
-if label == "neither":
-    st.write("You said neither of the answers are correct.")
-
-    text_area_col, text_preview_col = st.columns(2)
-
-    with text_area_col:
-        correct_answer_text = st.text_area(
-            "**(Optional)** *If you're confident that you know the correct answer, enter it below. "
-            "Be as specific and concise as possible.*",
-            key=f"text-area-{data_point['id']}",
-            height=200,
-        )
-
-    with text_preview_col:
-        st.write("**Preview**")
-        st.markdown(correct_answer_text)
-
-submitted = st.button("Submit", disabled=label is None)
-
-if submitted:
-    st.write("✅ Thank you for your submission!")
-    preferred_answer = (
-        answers[0]
-        if label == "answer_1"
-        else answers[1]
-        if label == "answer_2"
-        else None
-    )
-    st.session_state.annotations[data_point["id"]] = {
-        "question_id": data_point["id"],
-        "question": data_point["question"],
-        "preferred_answer": preferred_answer,
-        "label": label,
-        "correct_answer_text": correct_answer_text,
-    }
-    if len(annotation_data) - len(st.session_state.annotations) > 0:
-        st.session_state.current_question_index += 1
+# Get achievement based on annotation count
+def get_achievement(count):
+    if count >= 100:
+        return "🏆", 4
+    elif count >= 50:
+        return "🥇", 3
+    elif count >= 20:
+        return "🥈", 2
+    elif count >= 5:
+        return "🥉", 1
     else:
-        with st.spinner("Submitting annotations..."):
-            submit_annotations(st.session_state.annotations, execution_id)
-    st.rerun()
+        return "🌟", 0
+
+# Send Slack notification
+def send_slack_notification(username, level):
+    slack_token = st.secrets["SLACK_API_TOKEN"]
+    client = WebClient(token=slack_token)
+    channel = st.secrets["SLACK_CHANNEL"]
+
+    messages = [
+        f"🌟 Whoa! {username} just started their annotation journey! They're officially a Novice Annotator. Every expert was once a beginner, right?",
+        f"🥉 Bronze brilliance! {username} leveled up to Bronze Annotator! They're on fire... well, more like a warm glow, but still impressive!",
+        f"🥈 Silver success! {username} just reached Silver Annotator status! They're shining brighter than a full moon on a clear night!",
+        f"🥇 Gold glory! {username} has ascended to Gold Annotator! They're practically radiating awesomeness at this point!",
+        f"🏆 Bow down to the new Annotation Master! {username} has reached the pinnacle of annotation greatness! We're not worthy! We're not worthy!"
+    ]
+
+    try:
+        response = client.chat_postMessage(
+            channel=channel,
+            text=messages[level]
+        )
+    except SlackApiError as e:
+        st.error(f"Error sending message to Slack: {e}")
+
+
+##########
+# Main app
+##########
+
+# with st.sidebar:
+#     st.write("Enter your email to enter the leaderboard")
+#     email = st.text_input("Email", value=st.session_state.email)
+#     if email:
+#         st.session_state.email = email
+#     placeholder = st.empty()
+
+
+def annotation_page():
+    st.title("🤖 Helpabot.")
+    st.write(
+        "*Help a bot out by picking the more factually correct "
+        "answer, i.e. the answer with fewer mistakes.* "
+    )
+
+    # Username input
+    username = st.text_input("Enter your username:", value=st.session_state.username)
+    if username:
+        st.session_state.username = username
+
+    if not username:
+        st.warning("Please enter a username to start annotating.")
+        return
+    
+    with st.spinner("Starting a new annotation session..."):
+        annotation_data, execution_id, url = get_annotation_data()
+        st.session_state.execution_id = execution_id
+
+    st.write("Below is a question about Flyte or Union and two answers to the question.")
+
+    question_ids = [q["id"] for q in annotation_data]
+    if len(st.session_state.annotations) == len(annotation_data):
+        st.write("You've answered all the questions!")
+        
+        new_session = st.button("Start new session")
+        if new_session:
+            refresh_session()
+
+        st.stop()
+
+    data_point = annotation_data[st.session_state.current_question_index]
+
+    question_container = st.container(border=True)
+    answer_columns = st.columns([4, 4, 1])
+
+    answer_1_column, answer_2_column = st.columns(2)
+
+    with question_container:
+        st.write("**Question**")
+        st.write(data_point["question"])
+
+    answers = data_point["answers"]
+    label = st.radio(
+        "Select the more factually correct answer.",
+        options=ANSWER_FORMAT.keys(),
+        index=None,
+        format_func=format_func,
+        key=f"radio-{data_point['id']}",
+    )
+
+    with answer_1_column:
+        c = st.container(border=True)
+        c.write("**Answer 1**")
+        c.write(answers[0])
+
+    with answer_2_column:
+        c = st.container(border=True)
+        c.write("Answer 2")
+        c.write(answers[1])
+
+    correct_answer_text = None
+    if label == "neither":
+        st.write("You said neither of the answers are correct.")
+
+        text_area_col, text_preview_col = st.columns(2)
+
+        with text_area_col:
+            correct_answer_text = st.text_area(
+                "If you're confident that you know the correct answer, enter it below. "
+                "Be as specific and concise as possible.",
+                key=f"text-area-{data_point['id']}",
+                height=200,
+            )
+
+        with text_preview_col:
+            st.write("**Preview**")
+            st.markdown(correct_answer_text)
+
+    submitted = st.button("Submit", disabled=label is None)
+
+    if submitted:
+        st.write("Thank you for your submission!")
+        st.session_state.question_ids_answered.append(data_point["id"])
+        st.write(f"Submission: {label, correct_answer_text}")
+        new_count = update_user_annotations(username)
+        new_achievement, new_level = get_achievement(new_count)
+        if new_level > st.session_state.user_level:
+            st.session_state.user_level = new_level
+            send_slack_notification(username, new_level)
+        unanswered = [q for q in question_ids if q not in st.session_state.question_ids_answered]
+        if len(unanswered) > 0:
+            st.session_state.current_question_id = random.choice(unanswered)
+        # TODO: send feedback back to the serverless execution via UnionRemote
+        st.rerun()
+
+def leaderboard_page():
+    st.title("Leaderboard")
+
+    col1, col2 = st.columns([3, 1])
+
+    with col1:
+        user_data = get_all_users()
+
+        # Sort users by annotation count
+        sorted_users = sorted(user_data.items(), key=lambda x: x[1], reverse=True)
+
+        # Display leaderboard
+        for rank, (user, count) in enumerate(sorted_users, 1):
+            achievement, _ = get_achievement(count)
+            st.markdown(f"{rank}. **{achievement} {user}**: {count} annotations")
+
+    with col2:
+        st.subheader("Achievement Legend")
+        st.write("🌟 Novice Annotator: 0-4 annotations")
+        st.write("🥉 Bronze Annotator: 5-19 annotations")
+        st.write("🥈 Silver Annotator: 20-49 annotations")
+        st.write("🥇 Gold Annotator: 50-99 annotations")
+        st.write("🏆 Annotation Master: 100+ annotations")
+
+def main():
+    tab1, tab2 = st.tabs(["Annotation", "Leaderboard"])
+
+    with tab1:
+        annotation_page()
+    with tab2:
+        leaderboard_page()
+
+if __name__ == "__main__":
+    main()
