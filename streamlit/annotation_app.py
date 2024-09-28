@@ -286,7 +286,7 @@ def annotation_page(username: str):
             if label == "answer_2"
             else answers
             if label == "both"
-            else None
+            else []
         )
         st.session_state.annotations[data_point["id"]] = {
             "question_id": data_point["id"],
