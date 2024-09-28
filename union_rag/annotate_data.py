@@ -16,7 +16,7 @@ AnnotatedDataset = Artifact(name="annotated_dataset", partition_keys=["name"])
 
 
 actor = ActorEnvironment(
-    name="agentic-rag",
+    name="data-annotation-sampler",
     ttl_seconds=720,
     container_image=image,
     requests=Resources(cpu="2", mem="4Gi"),
