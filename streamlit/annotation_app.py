@@ -30,6 +30,7 @@ N_SAMPLES = 10
 ANSWER_FORMAT = {
     "answer_1": "Answer 1",
     "answer_2": "Answer 2",
+    "tie": "It's a tie",
     "neither": "Neither are correct",
 }
 
@@ -278,7 +279,6 @@ def annotation_page(username: str):
     submitted = st.button("Submit", disabled=label is None)
 
     if submitted:
-        label = 0 if label == "answer_1" else 1 if label == "answer_2" else -1
         st.session_state.annotations[data_point["id"]] = {
             "question_id": data_point["id"],
             "question": data_point["question"],
