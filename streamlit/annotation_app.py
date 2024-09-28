@@ -280,7 +280,7 @@ def annotation_page(username: str):
             "question": data_point["question"],
             "answers": answers,
             "label": label,
-            "correct_answer_text": correct_answer_text,
+            "correct_answer_text": correct_answer_text or None,
         }
 
         if len(annotation_data) - len(st.session_state.annotations) > 0:
