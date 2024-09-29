@@ -40,12 +40,10 @@ session_id = st.runtime.scriptrunner.get_script_run_ctx().session_id
 
 
 # Initialize session state
-if "current_question_id" not in st.session_state:
-    st.session_state.current_question_id = None
 if "username" not in st.session_state:
     st.session_state.username = ""
-# if "user_level" not in st.session_state:
-#     st.session_state.user_level = 0
+if "annotation_data" not in st.session_state:
+    st.session_state.annotation_data = None
 if "annotations" not in st.session_state:
     st.session_state.annotations = {}
 if "current_question_index" not in st.session_state:
@@ -54,6 +52,8 @@ if "email" not in st.session_state:
     st.session_state.email = ""
 if "execution_id" not in st.session_state:
     st.session_state.execution_id = None
+if "execution_url" not in st.session_state:
+    st.session_state.execution_url = None
 
 
 @st.cache_data(show_spinner=False)
@@ -61,6 +61,7 @@ def get_annotation_data(username: str, session_id: str) -> tuple[list[dict], str
     """
     Gets a new set of question and answer-pair triplets on every page load.
     """
+    st.write("✨ Creating serverless execution... ")
     remote = UnionRemote()
     seed = random.randint(0, 1000000)
     workflow = remote.fetch_workflow(
@@ -75,10 +76,11 @@ def get_annotation_data(username: str, session_id: str) -> tuple[list[dict], str
         ),
     )
     url = remote.generate_console_url(execution)
-    print(f"🚀 Union Serverless execution url: {url}")
+    st.write(f"🚀 [Union Serverless execution]({url})")
 
     n_retries = 240
     annotation_data = None
+    st.write("⏳ Waiting for annotation payload...")
     for _ in range(n_retries):
         # gets the answer from the first node, which is the "ask" workflow.
         # the second part of the workflow is the feedback loop.
@@ -155,13 +157,13 @@ def update_user_annotations(username, count=1):
 
 # Get achievement based on annotation count
 def get_achievement(count):
-    if count >= 100:
+    if count >= 200:
         return "🏆", 4
-    elif count >= 50:
+    elif count >= 100:
         return "🥇", 3
-    elif count >= 20:
+    elif count >= 50:
         return "🥈", 2
-    elif count >= 5:
+    elif count >= 25:
         return "🥉", 1
     else:
         return "🌟", 0
@@ -202,9 +204,20 @@ def annotation_page(username: str):
     curr_user_annotation_count = get_user_annotation_count(username)
     _, curr_level = get_achievement(curr_user_annotation_count)
 
-    with st.spinner("Starting a new annotation session..."):
-        annotation_data, execution_id, url = get_annotation_data(username, session_id)
-        st.session_state.execution_id = execution_id
+    if st.session_state.execution_id is None:
+        with st.status("Starting a new annotation session...", expanded=True) as status:
+            annotation_data, execution_id, execution_url = get_annotation_data(
+                username, session_id
+            )
+            status.update(label="Session created", state="complete", expanded=False)
+            st.session_state.execution_id = execution_id
+            st.session_state.annotation_data = annotation_data
+            st.session_state.execution_url = execution_url
+            st.rerun()
+
+    annotation_data = st.session_state.annotation_data
+    execution_id = st.session_state.execution_id
+    execution_url = st.session_state.execution_url
 
     st.write("#### Instructions:")
     st.write(
@@ -220,7 +233,7 @@ def annotation_page(username: str):
 
         return
 
-    st.write(f"Annotation session: [{execution_id}]({url})")
+    st.write(f"Annotation session: [{execution_id}]({execution_url})")
     st.warning(
         "Refreshing the page will start a new session and your progress will be lost."
     )
@@ -319,12 +332,13 @@ def leaderboard_page():
             st.markdown(f"{rank}. **{achievement} {user}**: {count} annotations")
 
     with col2:
-        st.subheader("Achievement Legend")
-        st.write("🌟 Novice Annotator: 0-4 annotations")
-        st.write("🥉 Bronze Annotator: 5-19 annotations")
-        st.write("🥈 Silver Annotator: 20-49 annotations")
-        st.write("🥇 Gold Annotator: 50-99 annotations")
-        st.write("🏆 Annotation Master: 100+ annotations")
+        with st.container(border=True):
+            st.markdown("#### Achievement Legend")
+            st.write("🌟 Novice Annotator: 0-24 annotations")
+            st.write("🥉 Bronze Annotator: 25-49 annotations")
+            st.write("🥈 Silver Annotator: 50-99 annotations")
+            st.write("🥇 Gold Annotator: 100-199 annotations")
+            st.write("🏆 Annotation Master: 200+ annotations")
 
 
 def main():

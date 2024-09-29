@@ -57,7 +57,7 @@ def create_comparison_data(
     comparisons = []
     user_reference_answers = []
     for annotation in annotations:
-        if annotation.correct_answer_text is not None:
+        if annotation.correct_answer_text:
             user_reference_answers.append(
                 ReferenceAnswer(
                     question_id=annotation.question_id,
@@ -66,7 +66,6 @@ def create_comparison_data(
                     is_user_generated=True,
                 )
             )
-            continue
         comparisons.append(annotation)
     return comparisons, user_reference_answers
 
@@ -116,7 +115,7 @@ def calculate_elo_rankings(
     # update the ratings based on the comparisons
     for annotation in comparisons:
         score = 0.0
-        if annotation.label == "both":
+        if annotation.label in ("both", "neither"):
             score = 0.5
         elif annotation.label == "answer_1":
             score = 1.0

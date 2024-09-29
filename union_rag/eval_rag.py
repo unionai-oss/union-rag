@@ -2,16 +2,27 @@
 
 import os
 from dataclasses import dataclass, asdict
+from functools import partial
 from typing import Annotated, Optional
 
 import pandas as pd
-from flytekit import current_context, dynamic, task, workflow, Artifact, Deck, Secret
+from flytekit import (
+    current_context,
+    dynamic,
+    map_task,
+    task,
+    workflow,
+    Artifact,
+    Deck,
+    Secret,
+    Resources,
+)
 from flytekit.deck import TopFrameRenderer
 from flytekit.types.directory import FlyteDirectory
 
 from union_rag.simple_rag import (
     create_knowledge_base,
-    answer_question,
+    answer_question as _answer_question,
     image as rag_image,
     RAGConfig,
 )
@@ -23,8 +34,13 @@ image = rag_image.with_packages(["nltk", "rouge-score"])
 
 
 @dataclass
+class EvalRAGConfig(RAGConfig):
+    condition_name: str = ""
+
+
+@dataclass
 class Question:
-    id: int
+    question_id: int
     question: str
     reference_answer: str
     is_user_generated: bool
@@ -44,34 +60,34 @@ class Answer:
 def prepare_questions(dataset: pd.DataFrame, n_answers: int) -> list[Question]:
     questions = (
         dataset.loc[dataset.index.repeat(n_answers)][
-            ["id", "question", "reference_answer", "is_user_generated"]
+            ["question_id", "question", "reference_answer", "is_user_generated"]
         ]
-        .astype({"id": int})
+        .astype({"question_id": int})
         .to_dict(orient="records")
     )
     return [Question(**record) for record in questions]
 
 
 @task(
+    requests=Resources(cpu="2", mem="4Gi"),
     container_image=image,
     secret_requests=[Secret(key="openai_api_key")],
     cache=True,
     cache_version="1",
 )
-def answer_questions(
-    questions: list[Question],
+def answer_question(
+    question: Question,
     search_index: FlyteDirectory,
     prompt_template: str,
-) -> list[Answer]:
-    answers = []
-    for question in questions:
-        answer = answer_question.task_function(
+) -> Answer:
+    return Answer(
+        answer=_answer_question.task_function(
             question=question.question,
             search_index=search_index,
             prompt_template=prompt_template,
-        )
-        answers.append(Answer(answer=answer, question_id=question.id))
-    return answers
+        ),
+        question_id=question.question_id,
+    )
 
 
 @workflow
@@ -80,17 +96,36 @@ def batch_rag_pipeline(
     config: RAGConfig,
 ) -> list[Answer]:
     search_index = create_knowledge_base(config)
-    answers = answer_questions(questions, search_index, config.prompt_template)
+    partial_answer_questions = partial(
+        answer_question,
+        search_index=search_index,
+        prompt_template=config.prompt_template,
+    )
+    answers = map_task(
+        partial_answer_questions,
+        concurrency=20,
+    )(question=questions)
     return answers
 
 
 @dynamic(container_image=image, cache=True, cache_version="1")
 def run_evaluation(
-    questions: list[Question], eval_configs: list[RAGConfig]
+    questions: list[Question], eval_configs: list[EvalRAGConfig]
 ) -> list[list[Answer]]:
     answers = []
     for config in eval_configs:
-        answers.append(batch_rag_pipeline(questions, config))
+        answers.append(
+            batch_rag_pipeline(
+                questions=questions,
+                config=RAGConfig(
+                    prompt_template=config.prompt_template,
+                    chunk_size=config.chunk_size,
+                    include_union=config.include_union,
+                    limit=config.limit,
+                    embedding_type=config.embedding_type,
+                ),
+            )
+        )
     return answers
 
 
@@ -102,17 +137,17 @@ def run_evaluation(
 )
 def combine_answers(
     answers: list[list[Answer]],
-    eval_configs: list[RAGConfig],
+    eval_configs: list[EvalRAGConfig],
     questions: list[Question],
 ) -> Annotated[pd.DataFrame, TopFrameRenderer(10)]:
     # TODO: concatenate all answers into a single dataframe
     combined_answers = []
     for _answers, config in zip(answers, eval_configs):
         for answer, question in zip(_answers, questions):
-            assert answer.question_id == question.id
+            assert answer.question_id == question.question_id
             combined_answers.append(
                 {
-                    "question_id": question.id,
+                    "question_id": question.question_id,
                     "question": question.question,
                     "answer": answer.answer,
                     "reference_answer": question.reference_answer,
@@ -203,6 +238,8 @@ def llm_correctness_eval(
     container_image=image,
     enable_deck=True,
     secret_requests=[Secret(key="openai_api_key")],
+    cache=True,
+    cache_version="1",
 )
 def evaluate_answers(
     answers_dataset: pd.DataFrame,
@@ -214,7 +251,7 @@ def evaluate_answers(
     evaluation = llm_correctness_eval(evaluation, eval_prompt_template)
 
     evaluation_summary = (
-        evaluation.groupby([*RAGConfig.__dataclass_fields__])[
+        evaluation.groupby([*EvalRAGConfig.__dataclass_fields__])[
             ["bleu_score", "rouge1_f1", "llm_correctness_score"]
         ]
         .mean()
@@ -230,9 +267,22 @@ def evaluate_answers(
     return evaluation, evaluation_summary
 
 
+# @task(
+#     container_image=image,
+#     enable_deck=True,
+#     cache=True,
+#     cache_version="1",
+# )
+# def evaluation_report(eval_results: pd.DataFrame):
+#     eval_results.set_index([*RAGConfig.__dataclass_fields__])
+#     current_context().decks.insert(
+#         0, Deck("Evaluation", TopFrameRenderer(10).to_html(eval_results))
+#     )
+
+
 @workflow
 def evaluate_simple_rag(
-    eval_configs: list[RAGConfig],
+    eval_configs: list[EvalRAGConfig],
     eval_dataset: Annotated[
         pd.DataFrame, EvalDatasetArtifact
     ] = EvalDatasetArtifact.query(),
@@ -242,5 +292,6 @@ def evaluate_simple_rag(
     questions = prepare_questions(eval_dataset, n_answers)
     answers = run_evaluation(questions, eval_configs)
     answers_dataset = combine_answers(answers, eval_configs, questions)
-    answer_evals = evaluate_answers(answers_dataset, eval_prompt_template)
-    return answer_evals
+    eval_results = evaluate_answers(answers_dataset, eval_prompt_template)
+    # evaluation_report(eval_results)
+    return eval_results
