@@ -239,7 +239,7 @@ def llm_correctness_eval(
     enable_deck=True,
     secret_requests=[Secret(key="openai_api_key")],
     cache=True,
-    cache_version="1",
+    cache_version="2",
 )
 def evaluate_answers(
     answers_dataset: pd.DataFrame,

@@ -56,5 +56,11 @@ union run --remote union_rag/eval_dataset.py create_eval_dataset --min_annotatio
 Evaluate a RAG experiment:
 
 ```bash
-union run --remote union_rag/eval_rag.py evaluate_simple_rag --eval_configs eval_inputs.yaml
+union run --remote union_rag/eval_rag.py evaluate_simple_rag --eval_configs config/eval_inputs.yaml
+```
+
+Experiment with different chunksizes:
+
+```bash
+union run --remote union_rag/eval_rag.py evaluate_simple_rag --eval_configs config/eval_inputs_chunksize.yaml
 ```

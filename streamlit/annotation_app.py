@@ -9,6 +9,7 @@ answer from a choice of two answers.
 import json
 import random
 import time
+from typing import Optional
 
 import redis
 import streamlit as st
@@ -36,7 +37,12 @@ ANSWER_FORMAT = {
 APP_VERSION = "testing0"
 
 
-st.set_page_config(layout="wide")
+st.set_page_config(
+    page_title="Helpabot",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 session_id = st.runtime.scriptrunner.get_script_run_ctx().session_id
 
 
@@ -193,11 +199,9 @@ def send_slack_notification(username, level):
 ##########
 
 
-def annotation_page(username: str):
-    # Username input
-
+def annotation_page(username: Optional[str]):
     if not username:
-        st.warning("Please enter a username to start annotating.")
+        st.write("Start a new session by entering your username in the sidebar 👈.")
         return
 
     curr_user_annotation_count = get_user_annotation_count(username)
@@ -233,9 +237,6 @@ def annotation_page(username: str):
         return
 
     st.write(f"Annotation session: [{execution_id}]({execution_url})")
-    st.warning(
-        "Refreshing the page will start a new session and your progress will be lost."
-    )
     data_point = annotation_data[st.session_state.current_question_index]
 
     percent_complete = len(st.session_state.annotations) / len(annotation_data)
@@ -267,51 +268,53 @@ def annotation_page(username: str):
     )
 
     correct_answer_text = None
+
+    def submit_answer(correct_answer_text, submit_key):
+        submitted = st.button("Submit", disabled=label is None, key=submit_key)
+        if submitted:
+            st.session_state.annotations[data_point["id"]] = {
+                "question_id": data_point["id"],
+                "question": data_point["question"],
+                "answers": answers,
+                "label": label,
+                "correct_answer_text": correct_answer_text or None,
+            }
+
+            if len(annotation_data) - len(st.session_state.annotations) > 0:
+                st.session_state.current_question_index += 1
+            else:
+
+                @st.dialog("Submitting annotations...")
+                def submitting():
+                    with st.spinner("🗂️ ⬆️ ☁️"):
+                        submit_annotations(st.session_state.annotations, execution_id)
+                        new_count = update_user_annotations(username, count=N_SAMPLES)
+                        new_achievement, new_level = get_achievement(new_count)
+                        if new_level > curr_level:
+                            # st.session_state.user_level = new_level
+                            send_slack_notification(username, new_level)
+
+                submitting()
+
+            st.rerun()
+
     if label == "neither":
-        st.write("You said neither of the answers are correct.")
 
-        text_area_col, text_preview_col = st.columns(2)
-
-        with text_area_col:
+        @st.dialog("(Optional) Submit your own answer.", width="large")
+        def submit_correct_answer():
+            st.write(f"**Question**: {data_point['question']}")
             correct_answer_text = st.text_area(
                 "If you're confident that you know the correct answer, enter it below. "
-                "Be as specific and concise as possible.",
+                "If not leave it blank and click 'Submit' to continue.",
                 key=f"text-area-{data_point['id']}",
                 height=200,
             )
+            submit_answer(correct_answer_text, submit_key="dialog-submit-answer")
 
-        with text_preview_col:
-            st.write("**Preview**")
-            st.markdown(correct_answer_text)
-
-    submitted = st.button("Submit", disabled=label is None)
-
-    if submitted:
-        st.session_state.annotations[data_point["id"]] = {
-            "question_id": data_point["id"],
-            "question": data_point["question"],
-            "answers": answers,
-            "label": label,
-            "correct_answer_text": correct_answer_text or None,
-        }
-
-        if len(annotation_data) - len(st.session_state.annotations) > 0:
-            st.session_state.current_question_index += 1
-        else:
-
-            @st.dialog("Submitting annotations...")
-            def submitting():
-                with st.spinner("🗂️ ⬆️ ☁️"):
-                    submit_annotations(st.session_state.annotations, execution_id)
-                    new_count = update_user_annotations(username, count=N_SAMPLES)
-                    new_achievement, new_level = get_achievement(new_count)
-                    if new_level > curr_level:
-                        # st.session_state.user_level = new_level
-                        send_slack_notification(username, new_level)
-
-            submitting()
-
-        st.rerun()
+        submit_answer(correct_answer_text, submit_key="submit-answer")
+        submit_correct_answer()
+    else:
+        submit_answer(correct_answer_text, submit_key="submit-answer")
 
 
 def leaderboard_page():
@@ -348,8 +351,15 @@ def main():
             "Enter your username to start a session:",
             value=st.session_state.username,
         )
+
         if username:
             st.session_state.username = username
+            st.warning(
+                "Refreshing the page will start a new session and your progress will be lost."
+            )
+
+        else:
+            st.error("Please enter a username to start a session.")
 
     tab1, tab2 = st.tabs(["Annotation", "Leaderboard"])
 
