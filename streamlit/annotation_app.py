@@ -33,6 +33,7 @@ ANSWER_FORMAT = {
     "tie": "It's a tie",
     "neither": "Neither are correct",
 }
+APP_VERSION = "testing0"
 
 
 st.set_page_config(layout="wide")
@@ -72,7 +73,7 @@ def get_annotation_data(username: str, session_id: str) -> tuple[list[dict], str
         inputs={"random_seed": seed, "n_samples": N_SAMPLES},
         options=Options(
             # Replace ':' with '_' since flyte does not allow ':' in the label value
-            labels=Labels(values={"union_annotator": "testing0"}),
+            labels=Labels(values={"union_annotator": APP_VERSION}),
         ),
     )
     url = remote.generate_console_url(execution)
