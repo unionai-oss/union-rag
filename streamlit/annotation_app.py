@@ -49,8 +49,6 @@ if "annotations" not in st.session_state:
     st.session_state.annotations = {}
 if "current_question_index" not in st.session_state:
     st.session_state.current_question_index = 0
-if "email" not in st.session_state:
-    st.session_state.email = ""
 if "execution_id" not in st.session_state:
     st.session_state.execution_id = None
 if "execution_url" not in st.session_state:
