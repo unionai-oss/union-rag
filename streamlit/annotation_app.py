@@ -20,6 +20,7 @@ from flytekit import Labels
 from flytekit.tools.translator import Options
 from union.remote import UnionRemote
 
+
 redis_client = redis.Redis(
     host="eminent-moccasin-23904.upstash.io",
     port=6379,
@@ -27,7 +28,7 @@ redis_client = redis.Redis(
     ssl=True,
 )
 
-N_SAMPLES = 10
+N_SAMPLES = 5
 ANSWER_FORMAT = {
     "answer_1": "Answer 1",
     "answer_2": "Answer 2",
@@ -50,6 +51,8 @@ session_id = st.runtime.scriptrunner.get_script_run_ctx().session_id
 # Initialize session state
 if "username" not in st.session_state:
     st.session_state.username = ""
+if "passcode" not in st.session_state:
+    st.session_state.passcode = ""
 if "annotation_data" not in st.session_state:
     st.session_state.annotation_data = None
 if "annotations" not in st.session_state:
@@ -200,9 +203,11 @@ def send_slack_notification(username, level):
 ##########
 
 
-def annotation_page(username: Optional[str]):
-    if not username:
-        st.write("Start a new session by entering your username in the sidebar 👈.")
+def annotation_page(username: Optional[str], passcode_correct: bool):
+    if not (username and passcode_correct):
+        st.write(
+            "Start a new session by entering a username and the secret passcode in the sidebar 👈."
+        )
         return
 
     curr_user_annotation_count = get_user_annotation_count(username)
@@ -349,23 +354,40 @@ def main():
         st.title("🤝🤖 Helpabot.")
         st.write("Help a bot out by selecting factually correct answers.")
         username = st.text_input(
-            "Enter your username to start a session:",
+            "Enter a username for the leaderboard:",
             value=st.session_state.username,
+        )
+        passcode = st.text_input(
+            "Enter the secret passcode to start a new session:",
+            value=st.session_state.passcode,
+            type="password",
         )
 
         if username:
             st.session_state.username = username
+
+        passcode_correct = False
+        if passcode:
+            if passcode == st.secrets["SECRET_PASSCODE"]:
+                st.session_state.passcode = passcode
+                passcode_correct = True
+
+        if username and passcode_correct:
             st.warning(
                 "Refreshing the page will start a new session and your progress will be lost."
             )
-
         else:
-            st.info("Please enter a username to start a session.")
+            if passcode and not passcode_correct:
+                st.warning("Incorrect passcode. Please try again.")
+            if not (username and passcode):
+                st.info(
+                    "Please enter a username and the secret passcode to start a session."
+                )
 
     tab1, tab2 = st.tabs(["Annotation", "Leaderboard"])
 
     with tab1:
-        annotation_page(username)
+        annotation_page(username, passcode_correct)
     with tab2:
         leaderboard_page()
 
