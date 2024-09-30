@@ -30,7 +30,7 @@ from union_rag.simple_rag import (
 
 EvalDatasetArtifact = Artifact(name="test-eval-dataset")
 
-image = rag_image.with_packages(["nltk", "rouge-score"])
+image = rag_image.with_packages(["nltk", "rouge-score", "seaborn"])
 
 
 @dataclass
@@ -113,19 +113,26 @@ def run_evaluation(
     questions: list[Question], eval_configs: list[EvalRAGConfig]
 ) -> list[list[Answer]]:
     answers = []
+    # _prev_answers = None
     for config in eval_configs:
-        answers.append(
-            batch_rag_pipeline(
-                questions=questions,
-                config=RAGConfig(
-                    prompt_template=config.prompt_template,
-                    chunk_size=config.chunk_size,
-                    include_union=config.include_union,
-                    limit=config.limit,
-                    embedding_type=config.embedding_type,
-                ),
-            )
+        _answers = batch_rag_pipeline(
+            questions=questions,
+            config=RAGConfig(
+                prompt_template=config.prompt_template,
+                chunk_size=config.chunk_size,
+                include_union=config.include_union,
+                limit=config.limit,
+                embedding_type=config.embedding_type,
+            ),
         )
+
+        # introduce serial dependency so that we don't exceed openai
+        # rate limits
+        # if _prev_answers is not None:
+        # _prev_answers >> _answers
+
+        answers.append(_answers)
+        # _prev_answers = _answers
     return answers
 
 
@@ -239,12 +246,14 @@ def llm_correctness_eval(
     enable_deck=True,
     secret_requests=[Secret(key="openai_api_key")],
     cache=True,
-    cache_version="2",
+    cache_version="3",
 )
 def evaluate_answers(
     answers_dataset: pd.DataFrame,
     eval_prompt_template: Optional[str] = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    import seaborn as sns
+
     os.environ["OPENAI_API_KEY"] = current_context().secrets.get(key="openai_api_key")
 
     evaluation = traditional_nlp_eval(answers_dataset)
@@ -257,27 +266,26 @@ def evaluate_answers(
         .mean()
         .reset_index()
     )
-    current_context().decks.insert(
-        0, Deck("Evaluation", TopFrameRenderer(10).to_html(evaluation))
+
+    analysis_df = evaluation_summary.melt(
+        id_vars=["condition_name"],
+        value_vars=["bleu_score", "rouge1_f1", "llm_correctness_score"],
+        var_name="metric",
+        value_name="score",
     )
-    current_context().decks.insert(
+
+    g = sns.FacetGrid(analysis_df, col="metric", sharey=False)
+    g.map_dataframe(sns.barplot, x="condition_name", y="score")
+    g.add_legend()
+
+    decks = current_context().decks
+    decks.insert(0, Deck("Evaluation", TopFrameRenderer(10).to_html(evaluation)))
+    decks.insert(
         0, Deck("Evaluation Summary", TopFrameRenderer(10).to_html(evaluation_summary))
     )
+    decks.insert(0, Deck("Benchmarking Results", _convert_fig_into_html(g.figure)))
 
     return evaluation, evaluation_summary
-
-
-# @task(
-#     container_image=image,
-#     enable_deck=True,
-#     cache=True,
-#     cache_version="1",
-# )
-# def evaluation_report(eval_results: pd.DataFrame):
-#     eval_results.set_index([*RAGConfig.__dataclass_fields__])
-#     current_context().decks.insert(
-#         0, Deck("Evaluation", TopFrameRenderer(10).to_html(eval_results))
-#     )
 
 
 @workflow
@@ -292,6 +300,17 @@ def evaluate_simple_rag(
     questions = prepare_questions(eval_dataset, n_answers)
     answers = run_evaluation(questions, eval_configs)
     answers_dataset = combine_answers(answers, eval_configs, questions)
-    eval_results = evaluate_answers(answers_dataset, eval_prompt_template)
-    # evaluation_report(eval_results)
-    return eval_results
+    evaluation, evalution_summary = evaluate_answers(
+        answers_dataset, eval_prompt_template
+    )
+    return evaluation, evalution_summary
+
+
+def _convert_fig_into_html(fig) -> str:
+    import io
+    import base64
+
+    img_buf = io.BytesIO()
+    fig.savefig(img_buf, format="png")
+    img_base64 = base64.b64encode(img_buf.getvalue()).decode()
+    return f'<img src="data:image/png;base64,{img_base64}" alt="Rendered Image" />'

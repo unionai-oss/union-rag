@@ -18,7 +18,9 @@ First create the knowledge base offline:
 
 ```bash
 union run --remote union_rag/simple_rag.py create_knowledge_base \
-   --config '{"exclude_patterns": ["/api/", "/_tags/"], "embedding_type": "openai", "limit": 100}'
+   --exclude_patterns '["/api/", "/_tags/"]' \
+   --embedding_type "openai" \
+   --limit 100
 ```
 
 ## Run the Simple RAG Workflow
@@ -52,8 +54,6 @@ Run the same workflow with feedback:
 union run --remote union_rag/agentic_rag.py ask_with_feedback \
    --question 'Write a flytekit workflow that trains an sklearn model on the wine dataset.'
 ```
-
-Refer to the [EVALUATION.md](./EVALUATION.md) section to learn how to evaluate the RAG workflows.
 
 ## Slack App Deployment
 

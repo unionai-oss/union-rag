@@ -65,6 +65,7 @@ FINAL ANSWER:
 
 @dataclass
 class RAGConfig(DataClassJSONMixin):
+    splitter: str = "character"
     prompt_template: str = ""
     chunk_size: int = 2048
     include_union: bool = False
@@ -98,7 +99,11 @@ def get_documents(
     if include_union:
         root_url_tags_mapping.update(
             {
-                "https://docs.union.ai/": ("article", {"class": "bd-article"}),
+                "https://docs.union.ai/byoc/": ("article", {"class": "bd-article"}),
+                "https://docs.union.ai/serverless/": (
+                    "article",
+                    {"class": "bd-article"},
+                ),
             }
         )
 
@@ -191,6 +196,7 @@ This artifact is a vector store of {len(document_chunks)} document chunks using 
 @openai_env_secret
 def create_search_index(
     documents: list[CustomDocument] = KnowledgeBase.query(),
+    splitter: str = "recursive",
     chunk_size: int | float | None = None,
     embedding_type: str = "openai",
 ) -> Annotated[FlyteDirectory, VectorStore(embedding_type=Inputs.embedding_type)]:
@@ -199,13 +205,36 @@ def create_search_index(
     """
     from langchain_community.vectorstores import FAISS
     from langchain.docstore.document import Document
-    from langchain.text_splitter import CharacterTextSplitter
+    from langchain.text_splitter import (
+        CharacterTextSplitter,
+        RecursiveCharacterTextSplitter,
+        MarkdownHeaderTextSplitter,
+    )
 
     chunk_size = chunk_size or 1024
     documents = [flyte_doc.to_document() for flyte_doc in documents]
-    splitter = CharacterTextSplitter(
-        separator=" ", chunk_size=int(chunk_size), chunk_overlap=0
-    )
+    if splitter == "character":
+        splitter = CharacterTextSplitter(
+            separator=" ", chunk_size=int(chunk_size), chunk_overlap=0
+        )
+    elif splitter == "recursive":
+        splitter = RecursiveCharacterTextSplitter(
+            separators=["\n\n", "\n", " ", ""],
+            chunk_size=chunk_size,
+            chunk_overlap=int(chunk_size * 0.2),
+            length_function=len,
+            is_separator_regex=False,
+        )
+    elif splitter == "markdown":
+        splitter = MarkdownHeaderTextSplitter(
+            headers_to_split_on=[
+                ("#", "Header 1"),
+                ("##", "Header 2"),
+                ("###", "Header 3"),
+            ]
+        )
+    else:
+        raise ValueError(f"Invalid splitter: {splitter}")
 
     if embedding_type == "openai":
         from langchain_openai import OpenAIEmbeddings
@@ -245,6 +274,7 @@ def create_knowledge_base(config: RAGConfig) -> FlyteDirectory:
     )
     search_index = create_search_index(
         documents=docs,
+        splitter=config.splitter,
         chunk_size=config.chunk_size,
         embedding_type=config.embedding_type,
     )

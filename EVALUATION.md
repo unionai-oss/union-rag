@@ -3,7 +3,9 @@
 First create a raw knowledge base:
 
 ```bash
-union run --remote union_rag/simple_rag.py get_documents --limit 100
+union run --remote union_rag/simple_rag.py get_documents \
+   --include_union \
+   --exclude_patterns '["/api/", "/_tags/"]'
 ```
 
 Then synthesize a question and answer dataset:
@@ -63,4 +65,10 @@ Experiment with different chunksizes:
 
 ```bash
 union run --remote union_rag/eval_rag.py evaluate_simple_rag --eval_configs config/eval_inputs_chunksize.yaml
+```
+
+Experiment with different splitters:
+
+```bash
+union run --remote union_rag/eval_rag.py evaluate_simple_rag --eval_configs config/eval_inputs_splitter.yaml
 ```

@@ -33,6 +33,7 @@ ANSWER_FORMAT = {
     "answer_2": "Answer 2",
     "tie": "It's a tie",
     "neither": "Neither are correct",
+    "question_incoherent": "The question doesn't make sense",
 }
 APP_VERSION = "testing0"
 
@@ -345,7 +346,7 @@ def leaderboard_page():
 
 def main():
     with st.sidebar:
-        st.title("🤖 Helpabot.")
+        st.title("🤝🤖 Helpabot.")
         st.write("Help a bot out by selecting factually correct answers.")
         username = st.text_input(
             "Enter your username to start a session:",
@@ -359,7 +360,7 @@ def main():
             )
 
         else:
-            st.error("Please enter a username to start a session.")
+            st.info("Please enter a username to start a session.")
 
     tab1, tab2 = st.tabs(["Annotation", "Leaderboard"])
 

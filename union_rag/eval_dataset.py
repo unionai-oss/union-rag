@@ -57,6 +57,8 @@ def create_comparison_data(
     comparisons = []
     user_reference_answers = []
     for annotation in annotations:
+        if annotation.label == "question_incoherent":
+            continue
         if annotation.correct_answer_text:
             user_reference_answers.append(
                 ReferenceAnswer(
