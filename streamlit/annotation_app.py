@@ -174,8 +174,10 @@ def get_achievement(count):
         return "🥈", 2
     elif count >= 25:
         return "🥉", 1
-    else:
+    elif count >= 5:
         return "🌟", 0
+    else:
+        return "◼️", -1
 
 
 # Send Slack notification
@@ -275,7 +277,9 @@ def annotation_page(username: Optional[str], passcode_correct: bool):
 
     correct_answer_text = None
 
-    def submit_answer(correct_answer_text, submit_key):
+    def submit_answer(
+        correct_answer_text, submit_key, submit_with_dialog: bool = False
+    ):
         submitted = st.button("Submit", disabled=label is None, key=submit_key)
         if submitted:
             st.session_state.annotations[data_point["id"]] = {
@@ -290,17 +294,18 @@ def annotation_page(username: Optional[str], passcode_correct: bool):
                 st.session_state.current_question_index += 1
             else:
 
-                @st.dialog("Submitting annotations...")
-                def submitting():
-                    with st.spinner("🗂️ ⬆️ ☁️"):
+                def submitting(msg: str):
+                    with st.spinner(msg):
                         submit_annotations(st.session_state.annotations, execution_id)
                         new_count = update_user_annotations(username, count=N_SAMPLES)
                         new_achievement, new_level = get_achievement(new_count)
                         if new_level > curr_level:
-                            # st.session_state.user_level = new_level
                             send_slack_notification(username, new_level)
 
-                submitting()
+                if submit_with_dialog:
+                    st.dialog("Submitting annotations...")(submitting)("🗂️ ⬆️ ☁️")
+                else:
+                    submitting("Submitting annotations 🗂️ ⬆️ ☁️")
 
             st.rerun()
 
@@ -336,13 +341,14 @@ def leaderboard_page():
 
         # Display leaderboard
         for rank, (user, count) in enumerate(sorted_users, 1):
-            achievement, _ = get_achievement(count)
-            st.markdown(f"{rank}. **{achievement} {user}**: {count} annotations")
+            achievement, curr_level = get_achievement(count)
+            if curr_level >= 0:
+                st.markdown(f"{rank}. **{achievement} {user}**: {count} annotations")
 
     with col2:
         with st.container(border=True):
             st.markdown("#### Achievement Legend")
-            st.write("🌟 Novice Annotator: 0-24 annotations")
+            st.write("🌟 Novice Annotator: 5-24 annotations")
             st.write("🥉 Bronze Annotator: 25-49 annotations")
             st.write("🥈 Silver Annotator: 50-99 annotations")
             st.write("🥇 Gold Annotator: 100-199 annotations")
