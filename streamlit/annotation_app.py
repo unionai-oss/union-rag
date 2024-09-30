@@ -37,7 +37,6 @@ ANSWER_FORMAT = {
     "question_incoherent": "The question doesn't make sense",
 }
 APP_VERSION = "testing0"
-LEADERBOARD_VERSION = st.secrets.get("LEADERBOARD_VERSION", "testing")
 
 
 st.set_page_config(
@@ -82,7 +81,7 @@ def get_annotation_data(username: str, session_id: str) -> tuple[list[dict], str
         inputs={"random_seed": seed, "n_samples": N_SAMPLES},
         options=Options(
             # Replace ':' with '_' since flyte does not allow ':' in the label value
-            labels=Labels(values={"union_annotator": "APP_VERSION"}),
+            labels=Labels(values={"union_annotator": APP_VERSION}),
         ),
     )
     url = remote.generate_console_url(execution)
@@ -133,14 +132,14 @@ def format_func(answer: str) -> str:
 def get_user_annotation_count(username):
     """Get the annotation count for a specific user."""
     return int(
-        redis_client.get(f"{LEADERBOARD_VERSION}_user_annotations:{username}") or 0
+        redis_client.get(f"user_annotations:{username}") or 0
     )  # Default to 0 if the user does not exist
 
 
 def get_all_users():
     """Retrieve all users and their annotation counts."""
     # Use Redis keys pattern to find all user keys
-    user_keys = redis_client.keys("{LEADERBOARD_VERSION}_user_annotations:*")
+    user_keys = redis_client.keys("user_annotations:*")
     user_data = {}
 
     for key in user_keys:
@@ -156,7 +155,7 @@ def get_all_users():
 # Update user's annotation count
 def update_user_annotations(username, count=1):
     # Create a unique key for each user based on their username
-    user_key = f"{LEADERBOARD_VERSION}_user_annotations:{username}"
+    user_key = f"user_annotations:{username}"
 
     # Increment the annotation count for the specified user
     new_count = redis_client.incrby(
@@ -336,20 +335,15 @@ def leaderboard_page():
 
     with col1:
         user_data = get_all_users()
-        if len(user_data) == 0:
-            st.write("No one has annotated any data yet.")
 
-        else:
-            # Sort users by annotation count
-            sorted_users = sorted(user_data.items(), key=lambda x: x[1], reverse=True)
+        # Sort users by annotation count
+        sorted_users = sorted(user_data.items(), key=lambda x: x[1], reverse=True)
 
-            # Display leaderboard
-            for rank, (user, count) in enumerate(sorted_users, 1):
-                achievement, curr_level = get_achievement(count)
-                if curr_level >= 0:
-                    st.markdown(
-                        f"{rank}. **{achievement} {user}**: {count} annotations"
-                    )
+        # Display leaderboard
+        for rank, (user, count) in enumerate(sorted_users, 1):
+            achievement, curr_level = get_achievement(count)
+            if curr_level >= 0:
+                st.markdown(f"{rank}. **{achievement} {user}**: {count} annotations")
 
     with col2:
         with st.container(border=True):
