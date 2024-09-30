@@ -186,10 +186,10 @@ def traditional_nlp_eval(answers_dataset: pd.DataFrame) -> pd.DataFrame:
 
 
 DEFAULT_EVAL_PROMPT_TEMPLATE = """### Task Description:
-You are an expert judge of trivia questions and answers. Given a
-question and a reference answer, determine if the candidate answer
-is equivalent or better than the reference answer in terms of
-correctness.
+You are an expert in judging the correctness of answers relating
+to Flyte and Union queries. Given a question and a reference answer,
+determine if the candidate answer is equivalent or better than the
+reference answer in terms of correctness.
 
 ### Question:
 {question}
@@ -246,7 +246,7 @@ def llm_correctness_eval(
     enable_deck=True,
     secret_requests=[Secret(key="openai_api_key")],
     cache=True,
-    cache_version="3",
+    cache_version="4",
 )
 def evaluate_answers(
     answers_dataset: pd.DataFrame,
