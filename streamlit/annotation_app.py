@@ -338,16 +338,18 @@ def leaderboard_page():
         user_data = get_all_users()
         if len(user_data) == 0:
             st.write("No one has annotated any data yet.")
-            return
 
-        # Sort users by annotation count
-        sorted_users = sorted(user_data.items(), key=lambda x: x[1], reverse=True)
+        else:
+            # Sort users by annotation count
+            sorted_users = sorted(user_data.items(), key=lambda x: x[1], reverse=True)
 
-        # Display leaderboard
-        for rank, (user, count) in enumerate(sorted_users, 1):
-            achievement, curr_level = get_achievement(count)
-            if curr_level >= 0:
-                st.markdown(f"{rank}. **{achievement} {user}**: {count} annotations")
+            # Display leaderboard
+            for rank, (user, count) in enumerate(sorted_users, 1):
+                achievement, curr_level = get_achievement(count)
+                if curr_level >= 0:
+                    st.markdown(
+                        f"{rank}. **{achievement} {user}**: {count} annotations"
+                    )
 
     with col2:
         with st.container(border=True):
