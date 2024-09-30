@@ -133,14 +133,14 @@ def format_func(answer: str) -> str:
 def get_user_annotation_count(username):
     """Get the annotation count for a specific user."""
     return int(
-        redis_client.get(f"{LEADERBOARD_VERSION}:user_annotations:{username}") or 0
+        redis_client.get(f"{LEADERBOARD_VERSION}_user_annotations:{username}") or 0
     )  # Default to 0 if the user does not exist
 
 
 def get_all_users():
     """Retrieve all users and their annotation counts."""
     # Use Redis keys pattern to find all user keys
-    user_keys = redis_client.keys("{LEADERBOARD_VERSION}:user_annotations:*")
+    user_keys = redis_client.keys("{LEADERBOARD_VERSION}_user_annotations:*")
     user_data = {}
 
     for key in user_keys:
@@ -156,7 +156,7 @@ def get_all_users():
 # Update user's annotation count
 def update_user_annotations(username, count=1):
     # Create a unique key for each user based on their username
-    user_key = f"{LEADERBOARD_VERSION}:user_annotations:{username}"
+    user_key = f"{LEADERBOARD_VERSION}_user_annotations:{username}"
 
     # Increment the annotation count for the specified user
     new_count = redis_client.incrby(
