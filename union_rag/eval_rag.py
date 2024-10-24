@@ -231,7 +231,7 @@ def llm_correctness_eval(
 
         result = result.content.lower().strip().strip(".").strip("'").strip('"')
         if result not in ["yes", "no"]:
-            score = float("nan")
+            score = 0.0
         elif result == "yes":
             score = 1.0
         else:
@@ -246,7 +246,7 @@ def llm_correctness_eval(
     enable_deck=True,
     secret_requests=[Secret(key="openai_api_key")],
     cache=True,
-    cache_version="4",
+    cache_version="5",
 )
 def evaluate_answers(
     answers_dataset: pd.DataFrame,
